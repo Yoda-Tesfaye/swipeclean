@@ -201,7 +201,7 @@ function Push-GitHubApi {
                     $message = $_.Exception.Message
                     Write-Host "== blob '$relative' attempt $attempt failed: $message"
                     if ($message -match '403') {
-                        Start-Sleep -Seconds 30
+                        Start-Sleep -Seconds 60
                     } else {
                         Start-Sleep -Seconds 2
                     }
@@ -210,7 +210,7 @@ function Push-GitHubApi {
             if (-not $blob) { throw "Could not upload $relative" }
             $sha = $blob.sha
             $uploaded++
-            Start-Sleep -Milliseconds 150
+            Start-Sleep -Seconds 2
         }
         $treeEntries += @{ path = $relative; mode = '100644'; type = 'blob'; sha = $sha }
     }
@@ -337,3 +337,4 @@ if (-not $ipa) { throw 'IPA was not unpacked' }
 Write-Host "== IPA: $($ipa.FullName) ($([math]::Round($ipa.Length / 1KB)) KB)"
 Write-Host '== DONE'
 exit 0
+
