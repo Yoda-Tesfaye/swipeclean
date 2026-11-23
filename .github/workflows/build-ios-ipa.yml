@@ -70,7 +70,8 @@ jobs:
           rm -rf Payload
           mkdir Payload
           cp -R "$APP" Payload/
-          IPA="$GITHUB_WORKSPACE/dist/SwipeClean-1.0.0-unsigned.ipa"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+          IPA="$GITHUB_WORKSPACE/dist/SwipeClean-${VERSION}-unsigned.ipa"
           rm -f "$IPA"
           zip -qry "$IPA" Payload
           rm -rf Payload
@@ -92,3 +93,4 @@ jobs:
           path: ios/xcodebuild.log
           if-no-files-found: ignore
           retention-days: 7
+

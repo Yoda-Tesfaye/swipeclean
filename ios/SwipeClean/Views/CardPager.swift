@@ -11,6 +11,7 @@ struct CardPager: View {
     @State private var drag: CGSize = .zero
     @State private var busy = false
     @State private var armed = false
+    @State private var axis: DragAxis?
 
     private var spring: Animation {
         .interactiveSpring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.2)
@@ -79,26 +80,48 @@ struct CardPager: View {
 
     // MARK: - Gesture
 
+    private enum DragAxis {
+        case horizontal
+        case vertical
+    }
+
     private func dragGesture(size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
                 guard !busy else { return }
                 var translation = value.translation
 
-                if engine.index == 0 && translation.width > 0 {
-                    translation.width *= 0.3
-                }
-                if engine.index >= max(engine.items.count - 1, 0) && translation.width < 0 {
-                    translation.width *= 0.3
-                }
-                if translation.height > 0 && engine.bin.isEmpty {
-                    translation.height *= 0.12
+                if axis == nil {
+                    let horizontal = abs(translation.width)
+                    let vertical = abs(translation.height)
+                    if max(horizontal, vertical) > 8 {
+                        axis = horizontal > vertical ? .horizontal : .vertical
+                    }
                 }
 
-                if !armed && translation.height < -90 {
+                switch axis {
+                case .horizontal:
+                    translation.height = 0
+                    if engine.index == 0 && translation.width > 0 {
+                        translation.width *= 0.3
+                    }
+                    if engine.index >= max(engine.items.count - 1, 0) && translation.width < 0 {
+                        translation.width *= 0.3
+                    }
+                case .vertical:
+                    // A vertical swipe stays exactly on the Y axis: no sideways drift.
+                    translation.width = 0
+                    if translation.height > 0 && engine.bin.isEmpty {
+                        translation.height *= 0.12
+                    }
+                case .none:
+                    translation = .zero
+                }
+
+                if translation.height < -90 && !armed {
                     armed = true
                     Haptics.tap()
-                } else if armed && translation.height > -60 {
+                } else if translation.height > -60 {
                     armed = false
                 }
 
@@ -106,16 +129,19 @@ struct CardPager: View {
             }
             .onEnded { value in
                 armed = false
+                let finishedAxis = axis
+                axis = nil
                 guard !busy else { return }
-                endDrag(value: value, size: size)
+                endDrag(value: value, size: size, axis: finishedAxis)
             }
     }
 
-    private func endDrag(value: DragGesture.Value, size: CGSize) {
+    private func endDrag(value: DragGesture.Value, size: CGSize, axis: DragAxis?) {
         let translation = value.translation
         let predicted = value.predictedEndTranslation
 
-        if abs(translation.width) >= abs(translation.height) {
+        switch axis {
+        case .horizontal:
             let threshold = max(64, size.width * 0.22)
             if translation.width < -threshold || predicted.width < -size.width * 0.6 {
                 page(forward: true, size: size)
@@ -124,7 +150,7 @@ struct CardPager: View {
             } else {
                 settle()
             }
-        } else {
+        case .vertical:
             if translation.height < -70 || predicted.height < -260 {
                 commitDelete(size: size)
             } else if translation.height > 70 || predicted.height > 260 {
@@ -132,6 +158,8 @@ struct CardPager: View {
             } else {
                 settle()
             }
+        case .none:
+            settle()
         }
     }
 
@@ -161,7 +189,7 @@ struct CardPager: View {
         busy = true
         Haptics.commit()
         withAnimation(.easeIn(duration: 0.18)) {
-            drag = CGSize(width: drag.width * 0.3, height: -size.height * 1.25)
+            drag = CGSize(width: 0, height: -size.height * 1.25)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
             var transaction = Transaction()
@@ -182,7 +210,7 @@ struct CardPager: View {
         busy = true
         Haptics.bump()
         withAnimation(.easeIn(duration: 0.16)) {
-            drag = CGSize(width: drag.width * 0.3, height: size.height * 1.25)
+            drag = CGSize(width: 0, height: size.height * 1.25)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.17) {
             var transaction = Transaction()

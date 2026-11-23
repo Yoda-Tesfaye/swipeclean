@@ -8,30 +8,32 @@ struct BatchPrompt: Identifiable {
     let id = UUID()
 }
 
-/// Owns the whole review session: the library snapshot, the cursor, the
-/// "to delete" bin, the 30-item checkpoint rhythm and the undo history.
+/// One review deck: either photos or videos. Owns the shuffled unseen queue,
+/// the "to delete" bin, the 30-item checkpoint rhythm and the undo stack.
 final class ReviewEngine: ObservableObject {
 
     enum Phase: Equatable {
-        case starting
-        case needsPermission
-        case denied
+        case loading
         case ready
-        case empty
         case finished
+        case empty
     }
 
-    let batchSize = 30
+    let mode: AssetMode
+    @Published var batchSize: Int = 30
+    private let history: ReviewHistoryStore
 
     // MARK: - Published state
 
-    @Published private(set) var phase: Phase = .starting
+    @Published private(set) var phase: Phase = .loading
     @Published private(set) var items: [PHAsset] = []
     @Published private(set) var index: Int = 0
     @Published private(set) var bin: [PHAsset] = []
     @Published private(set) var reviewedCount: Int = 0
-    @Published private(set) var deletedCount: Int = 0
     @Published private(set) var reviewedInBatch: Int = 0
+    @Published private(set) var deletedCount: Int = 0
+    @Published private(set) var historyCount: Int = 0
+    @Published private(set) var totalInLibrary: Int = 0
     @Published private(set) var canUndo: Bool = false
     @Published private(set) var isDeleting: Bool = false
     @Published var pendingBatch: BatchPrompt?
@@ -39,8 +41,15 @@ final class ReviewEngine: ObservableObject {
 
     // MARK: - Private state
 
-    private var history: [(index: Int, binned: Bool)] = []
+    private var stack: [(index: Int, binned: Bool)] = []
     private var toastWork: DispatchWorkItem?
+
+    // MARK: - Init
+
+    init(mode: AssetMode, history: ReviewHistoryStore = .shared) {
+        self.mode = mode
+        self.history = history
+    }
 
     // MARK: - Derived state
 
@@ -59,113 +68,104 @@ final class ReviewEngine: ObservableObject {
         return min(max(Double(reviewedCount) / Double(total), 0), 1)
     }
 
-    var keptCount: Int {
-        max(reviewedCount - deletedCount - bin.count, 0)
-    }
+    var isReady: Bool { phase == .ready }
 
-    // MARK: - Lifecycle
+    // MARK: - Loading
 
-    func start() {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        switch status {
-        case .authorized, .limited:
-            loadLibrary()
-        case .notDetermined:
-            phase = .needsPermission
-        default:
-            phase = .denied
-        }
-    }
-
-    /// Called when the app comes back to the foreground (for example after the
-    /// user granted access in Settings).
-    func recheck() {
-        guard phase == .denied || phase == .needsPermission else { return }
-        start()
-    }
-
-    func requestAccess() {
-        phase = .starting
-        PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] status in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if status == .authorized || status == .limited {
-                    self.loadLibrary()
-                } else {
-                    self.phase = .denied
-                }
-            }
-        }
-    }
-
-    func loadLibrary() {
-        phase = .starting
+    func load() {
+        phase = .loading
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        options.predicate = NSPredicate(format: "mediaType == %d || mediaType == %d",
-                                       PHAssetMediaType.image.rawValue,
-                                       PHAssetMediaType.video.rawValue)
+        options.predicate = NSPredicate(format: "mediaType == %d", mediaTypeValue)
 
         let result = PHAsset.fetchAssets(with: options)
-        var list: [PHAsset] = []
-        list.reserveCapacity(result.count)
+        var all: [PHAsset] = []
+        all.reserveCapacity(result.count)
         result.enumerateObjects { asset, _, _ in
-            list.append(asset)
+            all.append(asset)
         }
 
-        items = list
+        let allIdentifiers = Set(all.map { $0.localIdentifier })
+        history.prune(mode: mode, valid: allIdentifiers)
+
+        let unseen = all.filter { !history.isViewed($0.localIdentifier, mode: mode) }
+
+        totalInLibrary = all.count
+        items = unseen.shuffled()
         index = 0
         reviewedCount = 0
-        deletedCount = 0
         reviewedInBatch = 0
+        deletedCount = 0
         bin.removeAll()
-        history.removeAll()
+        stack.removeAll()
         canUndo = false
         pendingBatch = nil
-        phase = list.isEmpty ? .empty : .ready
+        historyCount = history.count(mode: mode)
+
+        if all.isEmpty {
+            phase = .empty
+        } else if items.isEmpty {
+            phase = .finished
+        } else {
+            phase = .ready
+        }
         prefetchNeighbours()
         Haptics.prepare()
     }
 
-    func rescan() {
-        loadLibrary()
+    func reload() {
+        load()
+    }
+
+    private var mediaTypeValue: Int {
+        switch mode {
+        case .photos: return PHAssetMediaType.image.rawValue
+        case .videos: return PHAssetMediaType.video.rawValue
+        }
     }
 
     // MARK: - Navigation
 
     func moveForward() {
-        guard phase == .ready, index < items.count else { return }
-        history.append((index: index, binned: false))
+        guard phase == .ready, let asset = current else { return }
+        history.markViewed(asset.localIdentifier, mode: mode)
+        stack.append((index: index, binned: false))
         reviewedCount += 1
         reviewedInBatch += 1
         index += 1
+        refreshHistoryCount()
         prefetchNeighbours()
         evaluatePosition()
     }
 
     func moveBackward() {
-        guard phase == .ready, index > 0 else { return }
+        guard index > 0 else { return }
         index -= 1
-        if let last = history.last, last.index == index {
-            history.removeLast()
-            reviewedCount = max(reviewedCount - 1, 0)
-            reviewedInBatch = max(reviewedInBatch - 1, 0)
+        if let last = stack.last, last.index == index {
+            stack.removeLast()
             if last.binned {
                 removeBin(at: index)
             }
+            reviewedCount = max(reviewedCount - 1, 0)
+            reviewedInBatch = max(reviewedInBatch - 1, 0)
         }
-        canUndo = !bin.isEmpty
+        if let asset = current {
+            history.unmarkViewed(asset.localIdentifier, mode: mode)
+        }
+        refreshHistoryCount()
         prefetchNeighbours()
     }
 
     func markCurrentForDeletion() {
         guard phase == .ready, let asset = current else { return }
+        history.markViewed(asset.localIdentifier, mode: mode)
         bin.append(asset)
-        history.append((index: index, binned: true))
+        stack.append((index: index, binned: true))
         reviewedCount += 1
         reviewedInBatch += 1
         index += 1
         canUndo = true
+        refreshHistoryCount()
         prefetchNeighbours()
         evaluatePosition()
     }
@@ -173,16 +173,18 @@ final class ReviewEngine: ObservableObject {
     func undoLastAction() {
         guard let asset = bin.last else { return }
         bin.removeLast()
-        let id = asset.localIdentifier
-        if let target = items.firstIndex(where: { $0.localIdentifier == id }) {
+        let identifier = asset.localIdentifier
+        if let target = items.firstIndex(where: { $0.localIdentifier == identifier }) {
             index = target
-            if let historyIndex = history.lastIndex(where: { $0.index == target && $0.binned }) {
-                history.remove(at: historyIndex)
+            if let stackIndex = stack.lastIndex(where: { $0.index == target && $0.binned }) {
+                stack.remove(at: stackIndex)
             }
+            history.unmarkViewed(identifier, mode: mode)
             reviewedCount = max(reviewedCount - 1, 0)
             reviewedInBatch = max(reviewedInBatch - 1, 0)
         }
         canUndo = !bin.isEmpty
+        refreshHistoryCount()
         prefetchNeighbours()
         showToast("已撤销")
     }
@@ -194,8 +196,8 @@ final class ReviewEngine: ObservableObject {
 
     func removeBin(at itemIndex: Int) {
         guard itemIndex >= 0, itemIndex < items.count else { return }
-        let id = items[itemIndex].localIdentifier
-        bin.removeAll { $0.localIdentifier == id }
+        let identifier = items[itemIndex].localIdentifier
+        bin.removeAll { $0.localIdentifier == identifier }
         canUndo = !bin.isEmpty
     }
 
@@ -278,22 +280,26 @@ final class ReviewEngine: ObservableObject {
     }
 
     private func applyDeletion(_ assets: [PHAsset]) {
-        let ids = Set(assets.map { $0.localIdentifier })
-        let currentID = current?.localIdentifier
+        let identifiers = Set(assets.map { $0.localIdentifier })
+        let currentIdentifier = current?.localIdentifier
 
-        items.removeAll { ids.contains($0.localIdentifier) }
-        bin.removeAll { ids.contains($0.localIdentifier) }
-        history.removeAll()
-        canUndo = !bin.isEmpty
+        items.removeAll { identifiers.contains($0.localIdentifier) }
+        bin.removeAll { identifiers.contains($0.localIdentifier) }
+        history.remove(identifiers, mode: mode)
+        historyCount = history.count(mode: mode)
         deletedCount += assets.count
+        stack.removeAll()
+        canUndo = !bin.isEmpty
 
-        if let currentID, let newIndex = items.firstIndex(where: { $0.localIdentifier == currentID }) {
+        if let currentIdentifier, let newIndex = items.firstIndex(where: { $0.localIdentifier == currentIdentifier }) {
             index = newIndex
         } else {
             index = min(index, items.count)
         }
 
-        if index >= items.count || items.isEmpty {
+        if items.isEmpty {
+            phase = totalInLibrary == 0 ? .empty : .finished
+        } else if index >= items.count {
             phase = .finished
         } else {
             phase = .ready
@@ -320,7 +326,11 @@ final class ReviewEngine: ObservableObject {
         ImageStore.shared.prefetch(window, target: ImageStore.target(for: target))
     }
 
-    // MARK: - Toast
+    // MARK: - Helpers
+
+    private func refreshHistoryCount() {
+        historyCount = history.count(mode: mode)
+    }
 
     func showToast(_ text: String) {
         toastWork?.cancel()

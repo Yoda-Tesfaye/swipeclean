@@ -35,7 +35,7 @@ struct AppMark: View {
 }
 
 struct PermissionView: View {
-    @ObservedObject var engine: ReviewEngine
+    let onRequest: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,17 +48,15 @@ struct PermissionView: View {
                 .foregroundColor(.white)
                 .padding(.top, 22)
 
-            Text("左右滑动浏览，上划加入删除备选，每 30 项确认一次。\n需要相册权限才能开始，所有内容只在本机处理。")
+            Text("照片和视频分成两套卡片，上滑加入删除备选，每 30 项确认一次。\n需要相册权限才能开始，所有内容只在本机处理。")
                 .font(.system(size: 14))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
                 .padding(.top, 12)
-                .padding(.horizontal, 34)
+                .padding(.horizontal, 32)
 
-            Button {
-                engine.requestAccess()
-            } label: {
+            Button(action: onRequest) {
                 Text("允许访问相册")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
@@ -81,7 +79,8 @@ struct PermissionView: View {
 }
 
 struct DeniedView: View {
-    @ObservedObject var engine: ReviewEngine
+    let onOpenSettings: () -> Void
+    let onRetry: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
@@ -102,9 +101,7 @@ struct DeniedView: View {
                 .lineSpacing(4)
                 .padding(.horizontal, 34)
 
-            Button {
-                openSettings()
-            } label: {
+            Button(action: onOpenSettings) {
                 Text("前往设置")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
@@ -116,59 +113,12 @@ struct DeniedView: View {
             .padding(.horizontal, 26)
             .padding(.top, 10)
 
-            Button {
-                engine.start()
-            } label: {
+            Button(action: onRetry) {
                 Text("重新检查")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Theme.textSecondary)
             }
             .buttonStyle(.plain)
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func openSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(url)
-    }
-}
-
-struct EmptyLibraryView: View {
-    @ObservedObject var engine: ReviewEngine
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Spacer(minLength: 0)
-
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 46, weight: .light))
-                .foregroundColor(Theme.textSecondary)
-
-            Text("相册里还没有内容")
-                .font(.system(size: 23, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-
-            Text("拍几张照片，或者从「最近删除」恢复一些内容后再回来。")
-                .font(.system(size: 13))
-                .foregroundColor(Theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-
-            Button {
-                engine.rescan()
-            } label: {
-                Text("重新扫描")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.accent))
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 26)
-            .padding(.top, 12)
 
             Spacer(minLength: 0)
         }

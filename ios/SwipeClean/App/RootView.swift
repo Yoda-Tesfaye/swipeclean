@@ -1,48 +1,51 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
-    @StateObject private var engine = ReviewEngine()
+    @StateObject private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
-            content
+
+            switch app.auth {
+            case .checking:
+                SplashView()
+            case .request:
+                PermissionView {
+                    app.requestAccess()
+                }
+            case .denied:
+                DeniedView(
+                    onOpenSettings: openSettings,
+                    onRetry: { app.start() }
+                )
+            case .ready:
+                HomeView(app: app)
+            }
         }
         .overlay(alignment: .bottom) {
-            if let toast = engine.toast {
+            if let toast = app.toast {
                 ToastView(text: toast)
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 132)
+                    .padding(.bottom, 120)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.easeOut(duration: 0.22), value: engine.toast)
+        .animation(.easeOut(duration: 0.22), value: app.toast)
         .onAppear {
-            engine.start()
+            app.start()
         }
         .onChange(of: scenePhase) { phase in
             if phase == .active {
-                engine.recheck()
+                app.recheck()
             }
         }
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch engine.phase {
-        case .starting:
-            SplashView()
-        case .needsPermission:
-            PermissionView(engine: engine)
-        case .denied:
-            DeniedView(engine: engine)
-        case .empty:
-            EmptyLibraryView(engine: engine)
-        case .ready:
-            ReviewScreen(engine: engine)
-        case .finished:
-            FinishedView(engine: engine)
-        }
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 }
