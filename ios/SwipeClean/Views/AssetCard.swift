@@ -20,6 +20,11 @@ struct AssetCard: View {
     var verdictProgress: Double = 0
 
     @State private var image: UIImage?
+    @ObservedObject private var settings = AppSettings.shared
+
+    private var useHDR: Bool {
+        asset.mediaType == .video ? settings.videoHDR : settings.photoHDR
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -27,9 +32,9 @@ struct AssetCard: View {
                 Theme.surface
 
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: fills ? .fill : .fit)
+                    HDRImageView(image: image,
+                                 hdr: useHDR,
+                                 contentMode: fills ? .scaleAspectFill : .scaleAspectFit)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                 } else {
@@ -55,6 +60,9 @@ struct AssetCard: View {
         }
         .shadow(color: Color.black.opacity(0.45), radius: 22, x: 0, y: 14)
         .onAppear(perform: loadImage)
+        .onChange(of: useHDR) { _ in
+            loadImage()
+        }
     }
 
     // MARK: - Verdict overlay
@@ -87,11 +95,11 @@ struct AssetCard: View {
     // MARK: - Loading
 
     private func loadImage() {
-        if let hit = ImageStore.shared.cached(for: asset, target: target) {
+        if let hit = ImageStore.shared.cached(for: asset, target: target, hdr: useHDR) {
             image = hit
             return
         }
-        ImageStore.shared.load(for: asset, target: target) { loaded in
+        ImageStore.shared.load(for: asset, target: target, hdr: useHDR) { loaded in
             guard let loaded else { return }
             image = loaded
         }

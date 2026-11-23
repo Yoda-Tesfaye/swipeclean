@@ -25,26 +25,26 @@ final class ImageStore {
                       height: max(size.height, 1) * scale)
     }
 
-    private func key(_ asset: PHAsset, _ size: CGSize) -> NSString {
+    private func key(_ asset: PHAsset, _ size: CGSize, _ hdr: Bool) -> NSString {
         let w = Int(size.width.rounded())
         let h = Int(size.height.rounded())
-        return "\(asset.localIdentifier)|\(w)x\(h)" as NSString
+        return "\(asset.localIdentifier)|\(w)x\(h)|\(hdr ? "hdr" : "sdr")" as NSString
     }
 
-    func cached(for asset: PHAsset, target: CGSize) -> UIImage? {
-        cache.object(forKey: key(asset, target))
+    func cached(for asset: PHAsset, target: CGSize, hdr: Bool = false) -> UIImage? {
+        cache.object(forKey: key(asset, target, hdr))
     }
 
-    func load(for asset: PHAsset, target: CGSize, completion: @escaping (UIImage?) -> Void) {
-        let cacheKey = key(asset, target)
+    func load(for asset: PHAsset, target: CGSize, hdr: Bool = false, completion: @escaping (UIImage?) -> Void) {
+        let cacheKey = key(asset, target, hdr)
         if let hit = cache.object(forKey: cacheKey) {
             completion(hit)
             return
         }
 
         let options = PHImageRequestOptions()
-        options.deliveryMode = .opportunistic
-        options.resizeMode = .fast
+        options.deliveryMode = hdr ? .highQualityFormat : .opportunistic
+        options.resizeMode = hdr ? .exact : .fast
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
 

@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import Photos
 
 struct HomeView: View {
@@ -28,35 +28,91 @@ struct HomeView: View {
 
 struct TabBar: View {
     @Binding var selection: HomeTab
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var dragTranslation: CGFloat = 0
+
+    private let barHeight: CGFloat = 56
+    private let inset: CGFloat = 6
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(HomeTab.allCases) { tab in
-                Button {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        selection = tab
-                    }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.symbol)
-                            .font(.system(size: 16, weight: .semibold))
-                        Text(tab.title)
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundColor(selection == tab ? .white : Theme.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule().fill(selection == tab ? Color.white.opacity(0.16) : Color.clear)
+        GeometryReader { geo in
+            let count = CGFloat(HomeTab.allCases.count)
+            let itemWidth = (geo.size.width - inset * 2) / count
+            let index = CGFloat(HomeTab.allCases.firstIndex(of: selection) ?? 0)
+            let baseX = inset + index * itemWidth
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.regularMaterial)
+                    .overlay(
+                        Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                     )
+                    .shadow(color: Color.black.opacity(0.35), radius: 16, x: 0, y: 8)
+
+                Capsule()
+                    .frame(width: itemWidth - 6, height: barHeight - 12)
+                    .floatingGlass(Capsule())
+                    .offset(x: baseX + dragTranslation + 3, y: 6)
+
+                HStack(spacing: 0) {
+                    ForEach(HomeTab.allCases) { tab in
+                        Button {
+                            select(tab)
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: tab.symbol)
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text(tab.title)
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundColor(selection == tab ? .white : Theme.textSecondary)
+                            .frame(width: itemWidth, height: barHeight)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(PressableStyle())
+                .padding(.horizontal, inset)
             }
+            .frame(width: geo.size.width, height: barHeight)
+            .contentShape(Capsule())
+            .simultaneousGesture(dragGesture(itemWidth: itemWidth, baseX: baseX, count: count))
         }
-        .padding(5)
-        .floatingGlass(Capsule())
+        .frame(height: barHeight)
         .padding(.horizontal, 46)
         .padding(.bottom, 8)
+    }
+
+    private func select(_ tab: HomeTab) {
+        guard tab != selection else { return }
+        Haptics.tap()
+        withAnimation(animation) {
+            selection = tab
+        }
+    }
+
+    private var animation: Animation? {
+        reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.3, bounce: 0.12)
+    }
+
+    private func dragGesture(itemWidth: CGFloat, baseX: CGFloat, count: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                let minX = -(baseX - inset)
+                let maxX = (count - 1) * itemWidth + inset - baseX
+                dragTranslation = min(max(value.translation.width, minX), maxX)
+            }
+            .onEnded { value in
+                let projected = baseX + value.predictedEndTranslation.width
+                let raw = (projected - inset) / itemWidth
+                let target = min(max(Int(raw.rounded()), 0), Int(count) - 1)
+                Haptics.tap()
+                withAnimation(animation) {
+                    selection = HomeTab.allCases[target]
+                    dragTranslation = 0
+                }
+            }
     }
 }
 

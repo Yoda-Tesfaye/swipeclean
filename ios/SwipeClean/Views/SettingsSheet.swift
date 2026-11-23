@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct SettingsSheet: View {
     @ObservedObject var app: AppModel
@@ -45,6 +45,16 @@ struct SettingsSheet: View {
                 }
 
                 group {
+                    toggleRow(title: "照片 HDR",
+                              subtitle: "以高动态范围显示 HDR 照片",
+                              isOn: $settings.photoHDR)
+                    separator
+                    toggleRow(title: "视频 HDR",
+                              subtitle: "以 HDR 播放视频，关闭则按 SDR 显示",
+                              isOn: $settings.videoHDR)
+                }
+
+                group {
                     Button {
                         app.resetHistory()
                         dismiss()
@@ -75,7 +85,7 @@ struct SettingsSheet: View {
                         .font(.system(size: 12))
                         .foregroundColor(Theme.textSecondary)
                     Spacer()
-                    Text("1.5.0")
+                    Text("1.6.0")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white)
                 }
@@ -105,6 +115,25 @@ struct SettingsSheet: View {
             .fill(Theme.hairline)
             .frame(height: 1)
             .padding(.leading, 16)
+    }
+
+    private func toggleRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white)
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.textTertiary)
+            }
+            Spacer()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(Theme.accent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func batchRow(for mode: AssetMode) -> some View {

@@ -9,11 +9,12 @@ import Combine
 /// never leaks between pages.
 struct VideoLayer: View {
     let asset: PHAsset
+    @ObservedObject private var settings = AppSettings.shared
 
     @StateObject private var loader = VideoLoader()
 
     var body: some View {
-        VideoSurface(player: loader.player)
+        VideoSurface(player: loader.player, hdr: settings.videoHDR)
             .onAppear { loader.load(asset) }
             .onDisappear { loader.unload() }
     }
@@ -21,16 +22,17 @@ struct VideoLayer: View {
 
 struct VideoSurface: UIViewRepresentable {
     let player: AVPlayer?
+    var hdr: Bool
 
     func makeUIView(context: Context) -> PlayerView {
         let view = PlayerView()
         view.backgroundColor = .clear
-        view.set(player: player)
+        view.set(player: player, hdr: hdr)
         return view
     }
 
     func updateUIView(_ uiView: PlayerView, context: Context) {
-        uiView.set(player: player)
+        uiView.set(player: player, hdr: hdr)
     }
 }
 
@@ -41,10 +43,14 @@ final class PlayerView: UIView {
         layer as! AVPlayerLayer
     }
 
-    func set(player: AVPlayer?) {
-        guard playerLayer.player !== player else { return }
-        playerLayer.player = player
+    func set(player: AVPlayer?, hdr: Bool) {
+        if playerLayer.player !== player {
+            playerLayer.player = player
+        }
         playerLayer.videoGravity = .resizeAspect
+        if #available(iOS 26.0, *) {
+            playerLayer.preferredDynamicRange = hdr ? .high : .standard
+        }
     }
 }
 

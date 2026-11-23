@@ -18,10 +18,20 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(haptics, forKey: Keys.haptics) }
     }
 
+    @Published var photoHDR: Bool {
+        didSet { defaults.set(photoHDR, forKey: Keys.photoHDR) }
+    }
+
+    @Published var videoHDR: Bool {
+        didSet { defaults.set(videoHDR, forKey: Keys.videoHDR) }
+    }
+
     private enum Keys {
         static let photoBatch = "settings.batch.photos"
         static let videoBatch = "settings.batch.videos"
         static let haptics = "settings.haptics"
+        static let photoHDR = "settings.hdr.photos"
+        static let videoHDR = "settings.hdr.videos"
     }
 
     private let defaults = UserDefaults.standard
@@ -30,6 +40,8 @@ final class AppSettings: ObservableObject {
         photoBatch = defaults.object(forKey: Keys.photoBatch) as? Int ?? 30
         videoBatch = defaults.object(forKey: Keys.videoBatch) as? Int ?? 30
         haptics = defaults.object(forKey: Keys.haptics) as? Bool ?? true
+        photoHDR = defaults.object(forKey: Keys.photoHDR) as? Bool ?? true
+        videoHDR = defaults.object(forKey: Keys.videoHDR) as? Bool ?? true
     }
 
     func batch(for mode: AssetMode) -> Int {
