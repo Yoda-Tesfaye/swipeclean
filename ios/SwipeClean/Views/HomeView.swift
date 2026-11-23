@@ -232,16 +232,7 @@ struct FanStack: View {
 
     var body: some View {
         GeometryReader { geo in
-            let maxWidth = min(geo.size.width * 0.60, 310)
-            let ratio = aspectRatio(of: engine.current)
-            var width = maxWidth
-            var height = width / ratio
-            let maxHeight = max(geo.size.height - 10, 160)
-            if height > maxHeight {
-                height = maxHeight
-                width = height * ratio
-            }
-            let size = CGSize(width: width, height: height)
+            let size = cardSize(in: geo.size)
 
             ZStack {
                 if engine.index + 2 < engine.items.count {
@@ -267,6 +258,19 @@ struct FanStack: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+    }
+
+    private func cardSize(in container: CGSize) -> CGSize {
+        let maxWidth = min(container.width * 0.60, 310)
+        let ratio = aspectRatio(of: engine.current)
+        var width = maxWidth
+        var height = width / ratio
+        let maxHeight = max(container.height - 10, 160)
+        if height > maxHeight {
+            height = maxHeight
+            width = height * ratio
+        }
+        return CGSize(width: max(width, 1), height: max(height, 1))
     }
 
     private func aspectRatio(of asset: PHAsset?) -> CGFloat {
