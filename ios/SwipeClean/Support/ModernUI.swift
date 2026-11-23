@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import UIKit
 
 /// Liquid Glass helpers modelled on the reference app (`floatingGlass()`):
@@ -10,7 +10,7 @@ extension View {
 
     /// Interactive floating chrome: back buttons, toolbars, pill menus.
     @ViewBuilder
-    func floatingGlass<S: Shape>(_ shape: S) -> some View {
+    func floatingGlass<S: InsettableShape>(_ shape: S) -> some View {
         if #available(iOS 26.0, *) {
             self.glassEffect(.regular.interactive(), in: shape)
         } else {
@@ -32,7 +32,7 @@ extension View {
 
     /// Non-interactive glass surface, used for the pull-up info panel.
     @ViewBuilder
-    func floatingGlassPanel<S: Shape>(_ shape: S) -> some View {
+    func floatingGlassPanel<S: InsettableShape>(_ shape: S) -> some View {
         if #available(iOS 26.0, *) {
             self.glassEffect(.regular, in: shape)
         } else {
@@ -59,3 +59,4 @@ enum AppMotion {
         reduceMotion ? nil : .spring(duration: 0.32, bounce: 0.08)
     }
 }
+
