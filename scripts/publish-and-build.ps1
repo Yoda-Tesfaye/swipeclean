@@ -176,9 +176,18 @@ if ($push.Code -eq 0) {
 } else {
     Write-Host '== github.com:443 is unreachable; publishing through the GitHub API instead'
     $headSha = Push-GitHubAPI -OwnerName $Owner -RepoNameParam $RepoName -HeadersParam $headers -Message 'chore: update SwipeClean'
-    $dispatchBody = @{ ref = 'main' } | ConvertTo-Json -Compress
-    Invoke-RestMethod -Method Post -Uri "$ApiBase/repos/$Owner/$RepoName/actions/workflows/build-ios-ipa.yml/dispatches" -Headers $headers -Body $dispatchBody -ContentType 'application/json' -TimeoutSec 60 | Out-Null
-    Write-Host '== Workflow dispatched through the API'
+    Start-Sleep -Seconds 6
+    $existingRuns = Invoke-RestMethod -Uri "$ApiBase/repos/$Owner/$RepoName/actions/runs?per_page=10" -Headers $headers -TimeoutSec 60
+    $existingRun = $existingRuns.workflow_runs |
+        Where-Object { $_.head_sha -eq $headSha -and $_.conclusion -ne 'cancelled' } |
+        Select-Object -First 1
+    if (-not $existingRun) {
+        $dispatchBody = @{ ref = 'main' } | ConvertTo-Json -Compress
+        Invoke-RestMethod -Method Post -Uri "$ApiBase/repos/$Owner/$RepoName/actions/workflows/build-ios-ipa.yml/dispatches" -Headers $headers -Body $dispatchBody -ContentType 'application/json' -TimeoutSec 60 | Out-Null
+        Write-Host '== Workflow dispatched through the API'
+    } else {
+        Write-Host '== The ref update already queued the workflow'
+    }
 }
 if (-not $headSha) { throw 'Could not publish the project.' }
 Write-Host "== Published $headSha to https://github.com/$Owner/$RepoName"
@@ -190,12 +199,15 @@ $runs = $null
 for ($i = 0; $i -lt 30; $i++) {
     Start-Sleep -Seconds 5
     $runs = Invoke-RestMethod -Uri "$ApiBase/repos/$Owner/$RepoName/actions/runs?per_page=15" -Headers $headers -TimeoutSec 30
-    $run = $runs.workflow_runs | Where-Object { $_.head_sha -eq $headSha } |
+    $run = $runs.workflow_runs |
+        Where-Object { $_.head_sha -eq $headSha -and $_.conclusion -ne 'cancelled' } |
         Sort-Object -Property created_at -Descending | Select-Object -First 1
     if ($run) { break }
 }
 if (-not $run -and $runs) {
-    $run = $runs.workflow_runs | Sort-Object -Property created_at -Descending | Select-Object -First 1
+    $run = $runs.workflow_runs |
+        Where-Object { $_.conclusion -ne 'cancelled' } |
+        Sort-Object -Property created_at -Descending | Select-Object -First 1
 }
 if (-not $run) { throw 'No workflow run appeared' }
 Write-Host "== Run #$($run.run_number) id=$($run.id)"
