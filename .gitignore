@@ -1,0 +1,18 @@
+.DS_Store
+.DS_Store?
+Thumbs.db
+
+# Xcode
+ios/build/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+**/xcuserdata/
+*.xcuserstate
+
+# Build output
+dist/
+*.ipa
+*.dSYM.zip
+
+# Local
+*.log

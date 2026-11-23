@@ -1,0 +1,94 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      CI: "1"
+      SWIFTCI_USE_LOCAL_DEPS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build app (code signing disabled)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project SwipeClean.xcodeproj \
+            -scheme SwipeClean \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee xcodebuild.log
+
+      - name: Package unsigned IPA
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          APP="$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -print -quit)"
+          if [ -z "$APP" ]; then
+            echo "No .app produced"
+            exit 1
+          fi
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          IPA="$GITHUB_WORKSPACE/dist/SwipeClean-1.0.0-unsigned.ipa"
+          rm -f "$IPA"
+          zip -qry "$IPA" Payload
+          rm -rf Payload
+          ls -lh "$GITHUB_WORKSPACE/dist"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwipeClean-ipa
+          path: dist/*.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwipeClean-build-log
+          path: ios/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 7
