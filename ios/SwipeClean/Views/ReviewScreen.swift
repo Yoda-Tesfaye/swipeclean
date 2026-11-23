@@ -1,15 +1,22 @@
 import SwiftUI
 import Photos
 
-/// Full-screen review deck, opened from the photos or videos tab.
+/// Full-screen review deck. Follows the reference app's immersion: the photo
+/// runs under floating Liquid Glass chrome, the header sits on top, and the
+/// info panel pulls up from the bottom instead of presenting a sheet.
 struct ReviewScreen: View {
     @ObservedObject var engine: ReviewEngine
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var chromeVisible = true
     @State private var showBin = false
-    @State private var showDetails = false
+    @State private var showInfo = false
     @State private var isFavorite = false
+
+    private var motion: Animation? {
+        AppMotion.spring(reduceMotion: reduceMotion)
+    }
 
     var body: some View {
         ZStack {
@@ -24,7 +31,7 @@ struct ReviewScreen: View {
             case .empty:
                 emptyState
             case .ready:
-                readyContent
+                viewer
             case .finished:
                 finishedState
             }
@@ -41,7 +48,7 @@ struct ReviewScreen: View {
                 VStack {
                     Spacer()
                     ToastView(text: toast)
-                        .padding(.bottom, 150)
+                        .padding(.bottom, 170)
                 }
                 .transition(.opacity)
             }
@@ -49,161 +56,161 @@ struct ReviewScreen: View {
         .sheet(isPresented: $showBin) {
             BinSheet(engine: engine)
         }
-        .sheet(isPresented: $showDetails) {
-            if let asset = engine.current {
-                AssetDetailSheet(asset: asset)
-            }
-        }
         .onAppear(perform: syncFavorite)
         .onChange(of: engine.index) { _ in
             syncFavorite()
+            if showInfo {
+                withAnimation(motion) {
+                    showInfo = false
+                }
+            }
         }
     }
 
-    // MARK: - Ready
+    // MARK: - Viewer
 
-    private var readyContent: some View {
-        VStack(spacing: 0) {
-            topBar
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
-                .opacity(chromeVisible ? 1 : 0)
-                .allowsHitTesting(chromeVisible)
-
-            CardPager(engine: engine, chromeVisible: $chromeVisible)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .overlay(alignment: .top) {
-                    if engine.reviewedCount == 0 {
-                        swipeHint
-                            .padding(.top, 6)
+    private var viewer: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                CardPager(engine: engine, chromeVisible: $chromeVisible)
+                    .overlay(alignment: .top) {
+                        if engine.reviewedCount == 0 {
+                            swipeHint
+                                .padding(.top, 74)
+                        }
                     }
-                }
-                .sheet(item: $engine.pendingBatch, onDismiss: {
-                    engine.skipBatch()
-                }) { _ in
-                    BatchSheet(engine: engine)
-                }
 
-            bottomBar
-                .padding(.horizontal, 22)
-                .padding(.bottom, 8)
-                .opacity(chromeVisible ? 1 : 0)
-                .allowsHitTesting(chromeVisible)
+                header
+
+                if showInfo, let asset = engine.current {
+                    AssetInfoPanel(asset: asset) {
+                        closeInfo()
+                    }
+                    .frame(height: min(geo.size.height * 0.56, 560))
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 92)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(2)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomControls
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+            }
         }
+        .animation(motion, value: showInfo)
     }
 
-    private var topBar: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                CircleIconButton(icon: "chevron.left") {
-                    dismiss()
-                }
+    // MARK: - Header
 
-                Spacer(minLength: 0)
-
-                VStack(spacing: 2) {
-                    Text("\(engine.reviewedCount) / \(engine.reviewedCount + engine.remaining)")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .monospacedDigit()
-                    Text("本组 \(engine.reviewedInBatch)/\(engine.batchSize)")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Theme.textSecondary)
-                        .monospacedDigit()
-                }
-
-                Spacer(minLength: 0)
-
-                Button {
-                    showBin = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("\(engine.bin.count)")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                    }
+    private var header: some View {
+        HStack(spacing: 12) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .glassSurface(Capsule())
-                }
-                .buttonStyle(.plain)
+                    .frame(width: 44, height: 44)
             }
+            .floatingGlass(Circle())
+            .accessibilityLabel("返回")
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.12))
-                    Capsule()
-                        .fill(Theme.accent)
-                        .frame(width: max(4, geo.size.width * engine.progress))
-                }
+            Spacer(minLength: 0)
+
+            VStack(spacing: 1) {
+                Text(relativeDateText)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(engine.mode.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.65))
             }
-            .frame(height: 3)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 6)
+            .floatingGlass(Capsule())
+
+            Spacer(minLength: 0)
+
+            Button {
+                showBin = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("\(engine.bin.count)")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                }
+                .foregroundColor(.white)
+                .frame(height: 44)
+                .padding(.horizontal, 14)
+            }
+            .floatingGlass(Capsule())
+            .accessibilityLabel("删除备选")
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .opacity(chromeVisible ? 1 : 0)
+        .allowsHitTesting(chromeVisible)
+        .animation(.easeOut(duration: 0.18), value: chromeVisible)
     }
 
-    private var bottomBar: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 0) {
-                Spacer()
+    // MARK: - Bottom controls
 
-                bottomControl(icon: isFavorite ? "heart.fill" : "heart",
-                              label: "收藏",
-                              tint: isFavorite ? Theme.danger : .white) {
+    private var bottomControls: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 2) {
+                controlButton(isFavorite ? "heart.fill" : "heart",
+                              tint: isFavorite ? Theme.danger : .white,
+                              enabled: true,
+                              label: isFavorite ? "取消收藏" : "收藏") {
                     toggleFavorite()
                 }
 
-                Spacer()
-
-                bottomControl(icon: "info.circle",
-                              label: "详情",
-                              tint: .white) {
-                    showDetails = true
+                controlButton("info.circle",
+                              tint: showInfo ? Theme.accent : .white,
+                              enabled: true,
+                              label: "详情") {
+                    toggleInfo()
                 }
 
-                Spacer()
-
-                bottomControl(icon: "arrow.uturn.backward",
-                              label: "撤回",
+                controlButton("arrow.uturn.backward",
                               tint: engine.bin.isEmpty ? Theme.textTertiary : .white,
-                              enabled: !engine.bin.isEmpty) {
+                              enabled: !engine.bin.isEmpty,
+                              label: "撤回上一步") {
                     engine.undoLastAction()
                 }
-
-                Spacer()
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 6)
+            .floatingGlass(Capsule())
 
             Text("上滑删除 · 左右切换")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Theme.textTertiary)
+                .foregroundColor(.white.opacity(0.55))
         }
+        .opacity(chromeVisible ? 1 : 0)
+        .allowsHitTesting(chromeVisible)
+        .animation(.easeOut(duration: 0.18), value: chromeVisible)
     }
 
-    private func bottomControl(icon: String,
-                               label: String,
+    private func controlButton(_ icon: String,
                                tint: Color,
-                               enabled: Bool = true,
+                               enabled: Bool,
+                               label: String,
                                action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundColor(tint)
-                    .frame(width: 52, height: 52)
-                    .glassSurface(Circle())
-
-                Text(label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Theme.textSecondary)
-            }
+            Image(systemName: icon)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: 56, height: 48)
+                .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.45)
+        .opacity(enabled ? 1 : 0.38)
         .accessibilityLabel(label)
     }
 
@@ -219,6 +226,30 @@ struct ReviewScreen: View {
         .padding(.vertical, 7)
         .glassSurface(Capsule())
         .transition(.opacity)
+    }
+
+    private var relativeDateText: String {
+        guard let date = engine.current?.creationDate else { return "照片" }
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date, to: Date())
+        if let years = components.year, years >= 1 { return "\(years) 年前" }
+        if let months = components.month, months >= 1 { return "\(months) 个月前" }
+        if let days = components.day, days >= 1 { return "\(days) 天前" }
+        return "今天"
+    }
+
+    // MARK: - Actions
+
+    private func toggleInfo() {
+        Haptics.tap()
+        withAnimation(motion) {
+            showInfo.toggle()
+        }
+    }
+
+    private func closeInfo() {
+        withAnimation(motion) {
+            showInfo = false
+        }
     }
 
     private func syncFavorite() {
@@ -344,7 +375,7 @@ struct CircleIconButton: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 44, height: 44)
-                .glassSurface(Circle())
+                .floatingGlass(Circle())
         }
         .buttonStyle(PressableStyle())
         .accessibilityLabel(icon == "chevron.left" ? "返回" : "关闭")

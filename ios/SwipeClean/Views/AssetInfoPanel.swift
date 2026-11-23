@@ -5,11 +5,11 @@ import CoreLocation
 import MapKit
 import UIKit
 
-/// The "详情" sheet behind the ⓘ button: date, dimensions, file info, camera
-/// settings and a live MapKit snippet for the capture location.
-struct AssetDetailSheet: View {
+/// Pull-up info panel, opened from the 详情 control. It slides over the photo
+/// with the reference app's spring instead of presenting a sheet.
+struct AssetInfoPanel: View {
     let asset: PHAsset
-    @Environment(\.dismiss) private var dismiss
+    var onClose: () -> Void
 
     @State private var properties: [String: Any] = [:]
     @State private var fileName: String = ""
@@ -23,6 +23,7 @@ struct AssetDetailSheet: View {
         span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
     )
     @State private var isLoading = true
+    @State private var dragOffset: CGFloat = 0
 
     private struct MapPoint: Identifiable {
         let id = UUID()
@@ -30,82 +31,119 @@ struct AssetDetailSheet: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 14) {
-                header
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Color.white.opacity(0.22))
+                .frame(width: 36, height: 4)
+                .padding(.top, 10)
 
-                card {
-                    row("拍摄时间", dateText)
-                    divider
-                    row("类型", typeText)
-                    divider
-                    row("分辨率", "\(asset.pixelWidth) × \(asset.pixelHeight)")
-                    if asset.mediaType == .video {
-                        divider
-                        row("时长", durationText)
-                    }
-                    if !fileName.isEmpty {
-                        divider
-                        row("文件名", fileName)
-                    }
-                    if !fileSizeText.isEmpty {
-                        divider
-                        row("文件大小", fileSizeText)
-                    }
+            HStack {
+                Text(asset.mediaType == .video ? "视频详情" : "照片详情")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 34, height: 34)
                 }
+                .floatingGlass(Circle())
+                .accessibilityLabel("收起详情")
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
 
-                if asset.mediaType == .image, !cameraRows.isEmpty {
-                    sectionTitle("拍摄参数")
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
                     card {
-                        ForEach(Array(cameraRows.enumerated()), id: \.offset) { index, item in
-                            if index > 0 { divider }
-                            row(item.0, item.1)
+                        row("拍摄时间", dateText)
+                        divider
+                        row("类型", typeText)
+                        divider
+                        row("分辨率", "\(asset.pixelWidth) × \(asset.pixelHeight)")
+                        if asset.mediaType == .video {
+                            divider
+                            row("时长", durationText)
+                        }
+                        if !fileName.isEmpty {
+                            divider
+                            row("文件名", fileName)
+                        }
+                        if !fileSizeText.isEmpty {
+                            divider
+                            row("文件大小", fileSizeText)
                         }
                     }
-                }
 
-                if !pins.isEmpty {
-                    sectionTitle("拍摄位置")
-                    locationCard
-                }
-
-                if isLoading {
-                    HStack(spacing: 8) {
-                        ProgressView().tint(.white.opacity(0.6))
-                        Text("正在读取元数据…")
-                            .font(.system(size: 12))
-                            .foregroundColor(Theme.textTertiary)
+                    if asset.mediaType == .image, !cameraRows.isEmpty {
+                        sectionTitle("拍摄参数")
+                        card {
+                            ForEach(Array(cameraRows.enumerated()), id: \.offset) { index, item in
+                                if index > 0 { divider }
+                                row(item.0, item.1)
+                            }
+                        }
                     }
-                    .padding(.top, 4)
+
+                    if !pins.isEmpty {
+                        sectionTitle("拍摄位置")
+                        locationCard
+                    }
+
+                    if isLoading {
+                        HStack(spacing: 8) {
+                            ProgressView().tint(.white.opacity(0.6))
+                            Text("正在读取元数据…")
+                                .font(.system(size: 12))
+                                .foregroundColor(Theme.textTertiary)
+                        }
+                        .padding(.top, 2)
+                    }
                 }
-
-                Text("照片本身不会显示这些信息，只有在这里查看")
-                    .font(.system(size: 11))
-                    .foregroundColor(Theme.textTertiary)
-                    .padding(.top, 4)
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+                .padding(.bottom, 28)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 40)
         }
-        .background(Theme.background.ignoresSafeArea())
-        .presentationDetents([.large])
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(.regularMaterial)
+        )
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color.black.opacity(0.38))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.35), Color.white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 14)
+        .offset(y: max(0, dragOffset))
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    if value.translation.height > 0 {
+                        dragOffset = value.translation.height
+                    }
+                }
+                .onEnded { value in
+                    if value.translation.height > 90 {
+                        onClose()
+                    }
+                    dragOffset = 0
+                }
+        )
         .onAppear(perform: load)
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Text(asset.mediaType == .video ? "视频详情" : "照片详情")
-                .font(.system(size: 26, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-            Spacer()
-            CircleIconButton(icon: "xmark") {
-                dismiss()
-            }
-        }
-        .padding(.top, 10)
-        .padding(.bottom, 2)
     }
 
     // MARK: - Location
@@ -119,7 +157,7 @@ struct AssetDetailSheet: View {
                     annotationItems: pins) { pin in
                     MapMarker(coordinate: pin.coordinate, tint: Theme.success)
                 }
-                .frame(height: 156)
+                .frame(height: 148)
 
                 if !elevationText.isEmpty {
                     Text(elevationText)
@@ -131,7 +169,7 @@ struct AssetDetailSheet: View {
                         .padding(10)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(placeName.isEmpty ? "未知地点" : placeName)
@@ -144,28 +182,26 @@ struct AssetDetailSheet: View {
                     .foregroundColor(Theme.textSecondary)
                     .multilineTextAlignment(.trailing)
             }
-            .padding(.horizontal, 4)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
+            .padding(.horizontal, 2)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
 
-            if !coordinateText.isEmpty {
-                Rectangle()
-                    .fill(Theme.hairline)
-                    .frame(height: 1)
+            if let coordinateText {
+                divider
                 row("坐标", coordinateText)
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 12)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.surface))
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.black.opacity(0.28)))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)
         )
     }
 
-    private var coordinateText: String {
-        guard let location = asset.location else { return "" }
+    private var coordinateText: String? {
+        guard let location = asset.location else { return nil }
         return String(format: "%.4f, %.4f", location.coordinate.latitude, location.coordinate.longitude)
     }
 
@@ -176,9 +212,9 @@ struct AssetDetailSheet: View {
             content()
         }
         .padding(.horizontal, 16)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.surface))
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.black.opacity(0.28)))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)
         )
     }
@@ -193,8 +229,8 @@ struct AssetDetailSheet: View {
         Text(text)
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(Theme.textSecondary)
-            .padding(.leading, 4)
-            .padding(.top, 4)
+            .padding(.leading, 2)
+            .padding(.top, 2)
     }
 
     private func row(_ title: String, _ value: String) -> some View {
@@ -209,7 +245,7 @@ struct AssetDetailSheet: View {
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 11)
     }
 
     // MARK: - Formatting

@@ -6,12 +6,12 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
   groupSortPosition: top
-  xcodeVersion: "16.0"
+  xcodeVersion: "26.0"
 
 settings:
   base:
-    MARKETING_VERSION: "1.4.0"
-    CURRENT_PROJECT_VERSION: "5"
+    MARKETING_VERSION: "1.5.0"
+    CURRENT_PROJECT_VERSION: "6"
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     ENABLE_BITCODE: NO
@@ -51,6 +51,8 @@ schemes:
       config: Debug
     archive:
       config: Release
+
+
 
 
 

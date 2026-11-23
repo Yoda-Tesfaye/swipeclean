@@ -1,4 +1,4 @@
-name: Build unsigned iOS IPA
+﻿name: Build unsigned iOS IPA
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build-ipa:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       CI: "1"
@@ -93,4 +93,5 @@ jobs:
           path: ios/xcodebuild.log
           if-no-files-found: ignore
           retention-days: 7
+
 

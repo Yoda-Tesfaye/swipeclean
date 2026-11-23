@@ -54,7 +54,7 @@ struct TabBar: View {
             }
         }
         .padding(5)
-        .glassSurface(Capsule())
+        .floatingGlass(Capsule())
         .padding(.horizontal, 46)
         .padding(.bottom, 8)
     }
@@ -139,7 +139,7 @@ struct DeckHome: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .glassSurface(Capsule())
+                .floatingGlass(Capsule())
             }
 
             Spacer(minLength: 0)
@@ -157,7 +157,7 @@ struct DeckHome: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .glassSurface(Capsule())
+                .floatingGlass(Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -346,4 +346,5 @@ struct StatusCard: View {
         )
     }
 }
+
 
