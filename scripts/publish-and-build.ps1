@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$RepoName = 'swipeclean',
     [string]$Owner = '',
     [switch]$Public
@@ -178,63 +178,54 @@ function Get-RemoteBlobMap {
     return $map
 }
 
-function Push-GitHubApi {
+function Push-GitHubContents {
+    # The Git Data API (git/blobs) is blocked on this network, but the Contents
+    # API still works: one commit per changed file, plus deletions.
     $remoteBlobs = Get-RemoteBlobMap
     $fileList = (Invoke-Native -FilePath 'git' -Arguments @('ls-files')).Output |
         Where-Object { $_ -and (Test-Path (Join-Path $RepoRoot $_)) }
 
-    $treeEntries = @()
-    $uploaded = 0
+    $localPaths = @{}
+    $changed = 0
     foreach ($file in $fileList) {
         $relative = $file -replace '\\', '/'
+        $localPaths[$relative] = $true
         $localSha = ((Invoke-Native -FilePath 'git' -Arguments @('hash-object', $file)).Output |
             Select-Object -First 1).Trim()
-        $sha = $remoteBlobs[$relative]
-        if (-not $sha -or $sha -ne $localSha) {
-            $bytes = [IO.File]::ReadAllBytes((Join-Path $RepoRoot $file))
-            $blobBody = @{ content = [Convert]::ToBase64String($bytes); encoding = 'base64' }
-            $blob = $null
-            for ($attempt = 1; $attempt -le 5 -and -not $blob; $attempt++) {
-                try {
-                    $blob = Invoke-Api -Method Post -Path "/repos/$Owner/$RepoName/git/blobs" -Body $blobBody
-                } catch {
-                    $message = $_.Exception.Message
-                    Write-Host "== blob '$relative' attempt $attempt failed: $message"
-                    if ($message -match '403') {
-                        Start-Sleep -Seconds 60
-                    } else {
-                        Start-Sleep -Seconds 2
-                    }
-                }
-            }
-            if (-not $blob) { throw "Could not upload $relative" }
-            $sha = $blob.sha
-            $uploaded++
-            Start-Sleep -Seconds 2
+        $remoteSha = $remoteBlobs[$relative]
+
+        if ($remoteSha -eq $localSha) { continue }
+
+        $bytes = [IO.File]::ReadAllBytes((Join-Path $RepoRoot $file))
+        $body = @{
+            message = "chore: update $relative"
+            content = [Convert]::ToBase64String($bytes)
+            branch  = 'main'
         }
-        $treeEntries += @{ path = $relative; mode = '100644'; type = 'blob'; sha = $sha }
+        if ($remoteSha) { $body.sha = $remoteSha }
+
+        Invoke-Api -Method Put -Path "/repos/$Owner/$RepoName/contents/$relative" -Body $body | Out-Null
+        $changed++
+        Write-Host "== updated $relative"
+        Start-Sleep -Milliseconds 800
     }
-    Write-Host "== Uploaded $uploaded changed file(s) of $($treeEntries.Count)"
 
-    $tree = Invoke-Api -Method Post -Path "/repos/$Owner/$RepoName/git/trees" -Body @{ tree = $treeEntries }
-    if (-not $tree -or -not $tree.sha) { throw 'Could not create the tree' }
-
-    $parent = $null
-    try {
-        $ref = Invoke-Api -Path "/repos/$Owner/$RepoName/git/ref/heads/main"
-        $parent = $ref.object.sha
-    } catch { }
-
-    $commitPayload = if ($parent) {
-        @{ message = 'chore: update SwipeClean'; tree = $tree.sha; parents = @($parent) }
-    } else {
-        @{ message = 'chore: update SwipeClean'; tree = $tree.sha; parents = @() }
+    foreach ($relative in $remoteBlobs.Keys) {
+        if (-not $localPaths.ContainsKey($relative)) {
+            Invoke-Api -Method Delete -Path "/repos/$Owner/$RepoName/contents/$relative" -Body @{
+                message = "chore: delete $relative"
+                sha     = $remoteBlobs[$relative]
+                branch  = 'main'
+            } | Out-Null
+            $changed++
+            Write-Host "== deleted $relative"
+            Start-Sleep -Milliseconds 800
+        }
     }
-    $commit = Invoke-Api -Method Post -Path "/repos/$Owner/$RepoName/git/commits" -Body $commitPayload
-    if (-not $commit -or -not $commit.sha) { throw 'Could not create the commit' }
 
-    Invoke-Api -Method Patch -Path "/repos/$Owner/$RepoName/git/refs/heads/main" -Body @{ sha = $commit.sha; force = $true } | Out-Null
-    return $commit.sha
+    Write-Host "== Sync committed $changed file change(s)"
+    $ref = Invoke-Api -Path "/repos/$Owner/$RepoName/git/ref/heads/main"
+    return $ref.object.sha
 }
 
 $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$token"))
@@ -252,7 +243,7 @@ if ($push.Code -eq 0) {
     $headSha = $null
     for ($attempt = 1; $attempt -le 3 -and -not $headSha; $attempt++) {
         try {
-            $headSha = Push-GitHubApi
+            $headSha = Push-GitHubContents
         } catch {
             Write-Host "== API push attempt $attempt failed: $($_.Exception.Message)"
             Start-Sleep -Seconds 3
@@ -337,4 +328,5 @@ if (-not $ipa) { throw 'IPA was not unpacked' }
 Write-Host "== IPA: $($ipa.FullName) ($([math]::Round($ipa.Length / 1KB)) KB)"
 Write-Host '== DONE'
 exit 0
+
 
