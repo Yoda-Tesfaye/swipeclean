@@ -43,24 +43,31 @@ ios/
     Assets.xcassets/          # AppIcon（脚本生成）、启动色
 scripts/
   make_icons.py               # 重新生成图标
-  win-build-ipa.ps1           # Windows 上一键云编译并下载 ipa
+  publish-and-build.ps1       # Windows 一键：建仓库、推送、云编译、下载 ipa
+  verify_ipa.py               # 校验 ipa 结构 / 架构 / 嵌入字符串
 .github/workflows/
   build-ios-ipa.yml           # macOS runner 编译未签名 ipa
 ```
 
 ## 构建 ipa
 
-### 方式 A：Windows 一键（需要 GitHub PAT）
+`.ipa` 里的可执行文件必须由 Xcode 编译，Windows 上没有 iOS 工具链，所以编译放在 GitHub 免费的 macOS runner 上完成（一次约 1–3 分钟）。
 
-1. GitHub → Settings → Developer settings → **Personal access tokens (classic)** → 生成，勾选 `repo` + `workflow`。
-2. 执行：
+### 方式 A：Windows 一键（不需要在聊天里贴 token）
+
+首次先让 Git Credential Manager 登录 GitHub（浏览器设备码，一次性）：
 
 ```powershell
-$env:GH_PAT = 'ghp_你的token'
-pwsh -File scripts\win-build-ipa.ps1
+git-credential-manager github login --device
 ```
 
-脚本会创建（或复用）私有仓库 `swipeclean`、推送代码、等待 macOS runner 编译、把 ipa 解压到 `dist/`。失败时会自动拉取构建日志尾部。
+之后每次一条命令：创建/复用私有仓库 → 推送 → 等待 macOS 编译 → 把 ipa 解压到 `dist/`：
+
+```powershell
+pwsh -File scripts\publish-and-build.ps1
+```
+
+脚本优先使用 `$env:GH_PAT`（classic PAT，`repo` + `workflow` 权限），没有设置时自动复用 Git Credential Manager 里已存的账号。
 
 ### 方式 B：GitHub 网页
 
@@ -82,6 +89,14 @@ zip -qry SwipeClean-unsigned.ipa Payload
 ```
 
 产物是**未签名 ipa**，不能直接 AirDrop 安装，需要用下面的工具用自己的 Apple ID 重签。
+
+### 验证产物
+
+```powershell
+python scripts\verify_ipa.py dist\SwipeClean-1.0.0-unsigned.ipa
+```
+
+检查项：单 App 结构、Bundle ID / 版本 / 最低系统、arm64 Mach-O、二进制里是否真的编进了本工程的中文界面串、以及是否确实未签名（无 `_CodeSignature`，留给侧载工具重签）。
 
 ## 安装到 iPhone（免费 Apple ID 侧载）
 

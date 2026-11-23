@@ -1,106 +1,126 @@
-# Publish SwipeClean, build it on GitHub's macOS runner and unpack the .ipa.
+param(
+    [string]$RepoName = 'swipeclean',
+    [string]$Owner = '',
+    [switch]$Public
+)
+
+# Publish this project to GitHub, build it on a macOS runner and unpack the
+# unsigned .ipa into dist/.
 #
-# Uses the GitHub credential already stored by Git Credential Manager, so no
-# token has to be typed into a chat window. Run it after:
-#   git-credential-manager github login --device
+# Credential resolution order:
+#   1. $env:GH_PAT (classic PAT with repo + workflow)
+#   2. the GitHub account already stored by Git Credential Manager
+#      (git-credential-manager github login --device)
 #
 #   pwsh -File scripts\publish-and-build.ps1
 
 $ErrorActionPreference = 'Stop'
 $ApiBase = 'https://api.github.com'
-$RepoName = 'swipeclean'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $DistDir = Join-Path $RepoRoot 'dist'
+$Gcm = 'C:\Program Files\Git\mingw64\bin\git-credential-manager.exe'
 
-# 1. Reuse the credential that GCM stored during the device login.
-$credential = "protocol=https`nhost=github.com`n`n" | git credential fill 2>$null
-if (-not $credential) { throw 'No GitHub credential found. Run: git-credential-manager github login --device' }
-$username = ''
-$token = ''
-foreach ($line in ($credential -split "`n")) {
-  if ($line -like 'username=*') { $username = $line.Substring(9).Trim() }
-  if ($line -like 'password=*') { $token = $line.Substring(9).Trim() }
-}
-if (-not $token) { throw 'Could not read the token from Git Credential Manager' }
+function Get-StoredToken {
+    param([string]$UserName)
 
-$Headers = @{
-  Authorization          = "Bearer $token"
-  Accept                 = 'application/vnd.github+json'
-  'X-GitHub-Api-Version' = '2022-11-28'
-  'User-Agent'           = 'swipeclean-build'
-}
+    $inFile = Join-Path $env:TEMP ("gcm-" + [guid]::NewGuid().ToString('N') + ".txt")
+    $payload = "protocol=https`nhost=github.com`n"
+    if ($UserName) { $payload += "username=$UserName`n" }
+    $payload += "`n"
+    [IO.File]::WriteAllText($inFile, $payload)
 
-function Invoke-GitHub {
-  param(
-    [string]$Method = 'GET',
-    [string]$Path,
-    $Body,
-    [switch]$AllowHttpErrors
-  )
-  $params = @{
-    Method     = $Method
-    Uri        = "$ApiBase$Path"
-    Headers    = $Headers
-    TimeoutSec = 120
-  }
-  if ($null -ne $Body) {
-    $params.Body = ($Body | ConvertTo-Json -Depth 8)
-    $params.ContentType = 'application/json'
-  }
-  if ($AllowHttpErrors) { $params.SkipHttpErrorCheck = $true }
-  Invoke-WebRequest @params
+    $previous = $env:GCM_INTERACTIVE
+    $env:GCM_INTERACTIVE = 'never'
+    try {
+        $raw = cmd /c "git credential fill < `"$inFile`" 2>&1"
+    } finally {
+        $env:GCM_INTERACTIVE = $previous
+        Remove-Item $inFile -ErrorAction SilentlyContinue
+    }
+
+    $line = $raw | Where-Object { $_ -like 'password=*' } | Select-Object -First 1
+    if ($line) { return $line.Substring(9).Trim() }
+    return $null
 }
 
-$me = (Invoke-GitHub -Path '/user').Content | ConvertFrom-Json
-$Login = $me.login
-Write-Host "== Authenticated as $Login"
+# 1. Resolve a token.
+$token = $env:GH_PAT
+if (-not $token) {
+    if (-not (Test-Path $Gcm)) {
+        throw 'No token. Set $env:GH_PAT or install Git Credential Manager and run: git-credential-manager github login --device'
+    }
+    $accounts = @(& $Gcm github list 2>$null | Where-Object { $_ -and $_ -ne 'x-access-token' })
+    foreach ($account in $accounts) {
+        $token = Get-StoredToken -UserName $account
+        if ($token) { Write-Host "== Using stored GitHub credential for $account"; break }
+    }
+}
+if (-not $token) {
+    throw 'No GitHub credential. Run: git-credential-manager github login --device'
+}
 
-# 2. Create the private repo when needed.
-$probe = Invoke-GitHub -Path "/repos/$Login/$RepoName" -AllowHttpErrors
-if ($probe.StatusCode -ne 200) {
-  Write-Host "== Creating private repo $Login/$RepoName"
-  $created = Invoke-GitHub -Method POST -Path '/user/repos' -Body @{
-    name        = $RepoName
-    private     = $true
-    auto_init   = $false
-    description = 'SwipeClean - swipe to review and clean the iOS photo library'
-  }
-  Write-Host "== Repo status $($created.StatusCode)"
-} else {
-  Write-Host "== Repo $Login/$RepoName already exists"
+$headers = @{
+    Authorization          = "Bearer $token"
+    Accept                 = 'application/vnd.github+json'
+    'X-GitHub-Api-Version' = '2022-11-28'
+    'User-Agent'           = 'swipeclean-build'
+}
+
+$me = Invoke-RestMethod -Uri "$ApiBase/user" -Headers $headers -TimeoutSec 30
+$login = $me.login
+if (-not $Owner) { $Owner = $login }
+Write-Host "== Authenticated as $login"
+
+# 2. Create the repository when it does not exist (422 means it already does).
+try {
+    $body = @{
+        name        = $RepoName
+        private     = (-not $Public)
+        auto_init   = $false
+        description = 'SwipeClean - swipe to review and clean the iOS photo library'
+    } | ConvertTo-Json
+    $repo = Invoke-RestMethod -Method Post -Uri "$ApiBase/user/repos" -Headers $headers -Body $body -ContentType 'application/json' -TimeoutSec 30
+    Write-Host "== Created $($repo.full_name) (private=$(-not $Public))"
+} catch {
+    Write-Host "== Repo $Owner/$RepoName already exists (or creation not needed)"
 }
 
 # 3. Commit and push.
 Set-Location $RepoRoot
 if (-not (Test-Path (Join-Path $RepoRoot '.git'))) {
-  git init -b main | Out-Host
+    git init -b main | Out-Host
 }
-git config user.name $Login
-git config user.email "$Login@users.noreply.github.com"
+git config user.name $login
+git config user.email "$login@users.noreply.github.com"
 git add -A
 git diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
-  git commit -m "feat: SwipeClean iOS app" | Out-Host
+    git commit -m "chore: update SwipeClean" | Out-Host
 }
 
-$remoteUrl = "https://x-access-token:$token@github.com/$Login/$RepoName.git"
-git remote remove origin 2>$null
-git remote add origin $remoteUrl
-git push origin HEAD:refs/heads/main --force | Out-Host
-if ($LASTEXITCODE -ne 0) {
-  throw 'git push failed. If GitHub complains about workflow scope, remove .github/workflows and add the file through the web UI.'
+$basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$token"))
+$pushOutput = git -c "http.extraheader=Authorization: Basic $basic" push "https://github.com/$Owner/$RepoName.git" HEAD:refs/heads/main --force 2>&1
+$pushExit = $LASTEXITCODE
+$pushOutput | Select-Object -Last 4 | Out-Host
+if ($pushExit -ne 0) {
+    throw 'git push failed. If GitHub rejects workflow files, grant the workflow scope or add .github/workflows through the web UI.'
 }
-Write-Host "== Pushed to https://github.com/$Login/$RepoName"
+$headSha = (git rev-parse HEAD).Trim()
+Write-Host "== Pushed $headSha to https://github.com/$Owner/$RepoName"
 
-# 4. Wait for the push-triggered run.
-Start-Sleep -Seconds 10
+# 4. Find the run for this commit (fall back to the latest run when the push
+#    did not change anything and therefore did not trigger a build).
 $run = $null
-for ($i = 0; $i -lt 20; $i++) {
-  $runs = (Invoke-GitHub -Path "/repos/$Login/$RepoName/actions/runs?per_page=10").Content | ConvertFrom-Json
-  $run = $runs.workflow_runs | Where-Object { $_.head_branch -eq 'main' } |
-    Sort-Object -Property created_at -Descending | Select-Object -First 1
-  if ($run) { break }
-  Start-Sleep -Seconds 6
+$runs = $null
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Seconds 5
+    $runs = Invoke-RestMethod -Uri "$ApiBase/repos/$Owner/$RepoName/actions/runs?per_page=15" -Headers $headers -TimeoutSec 30
+    $run = $runs.workflow_runs | Where-Object { $_.head_sha -eq $headSha } |
+        Sort-Object -Property created_at -Descending | Select-Object -First 1
+    if ($run) { break }
+}
+if (-not $run -and $runs) {
+    $run = $runs.workflow_runs | Sort-Object -Property created_at -Descending | Select-Object -First 1
 }
 if (-not $run) { throw 'No workflow run appeared' }
 Write-Host "== Run #$($run.run_number) id=$($run.id)"
@@ -109,44 +129,41 @@ Write-Host "== $($run.html_url)"
 # 5. Poll until finished.
 $deadline = (Get-Date).AddMinutes(40)
 while ($run.status -ne 'completed' -and (Get-Date) -lt $deadline) {
-  Start-Sleep -Seconds 20
-  $run = (Invoke-GitHub -Path "/repos/$Login/$RepoName/actions/runs/$($run.id)").Content | ConvertFrom-Json
-  Write-Host ("== [{0}] {1} / {2}" -f (Get-Date -Format 'HH:mm:ss'), $run.status, $run.conclusion)
+    Start-Sleep -Seconds 20
+    $run = Invoke-RestMethod -Uri "$ApiBase/repos/$Owner/$RepoName/actions/runs/$($run.id)" -Headers $headers -TimeoutSec 30
+    Write-Host ("== [{0}] {1} / {2}" -f (Get-Date -Format 'HH:mm:ss'), $run.status, $run.conclusion)
 }
 Write-Host "== Final: $($run.status) $($run.conclusion)"
 
 if ($run.conclusion -ne 'success') {
-  try {
-    $logs = Invoke-GitHub -Path "/repos/$Login/$RepoName/actions/runs/$($run.id)/logs" -AllowHttpErrors
-    if ($logs.StatusCode -eq 302) {
-      $zip = Join-Path $env:TEMP "swipeclean-logs-$($run.id).zip"
-      Invoke-WebRequest -Uri $logs.Headers.Location -OutFile $zip -TimeoutSec 300
-      $dir = Join-Path $env:TEMP "swipeclean-logs-$($run.id)"
-      Expand-Archive $zip -DestinationPath $dir -Force
-      Get-ChildItem $dir -Recurse -File | ForEach-Object {
-        Write-Host "----- $($_.Name) -----"
-        Get-Content $_.FullName -Tail 120
-      }
+    try {
+        $logZip = Join-Path $env:TEMP "swipeclean-logs-$($run.id).zip"
+        Invoke-WebRequest -Uri "$ApiBase/repos/$Owner/$RepoName/actions/runs/$($run.id)/logs" -Headers $headers -OutFile $logZip -UseBasicParsing -TimeoutSec 300
+        $logDir = Join-Path $env:TEMP "swipeclean-logs-$($run.id)"
+        Expand-Archive -Path $logZip -DestinationPath $logDir -Force
+        Get-ChildItem $logDir -Recurse -File | ForEach-Object {
+            Write-Host "----- $($_.Name) -----"
+            Get-Content $_.FullName -Tail 120
+        }
+    } catch {
+        Write-Host "Could not fetch logs: $($_.Exception.Message)"
     }
-  } catch { Write-Host "Could not fetch logs: $($_.Exception.Message)" }
-  throw "Build failed: $($run.conclusion)"
+    throw "Build failed: $($run.conclusion)"
 }
 
 # 6. Download and unpack the artifact.
-$arts = (Invoke-GitHub -Path "/repos/$Login/$RepoName/actions/runs/$($run.id)/artifacts").Content | ConvertFrom-Json
+$arts = Invoke-RestMethod -Uri "$ApiBase/repos/$Owner/$RepoName/actions/runs/$($run.id)/artifacts" -Headers $headers -TimeoutSec 30
 $artifact = $arts.artifacts | Where-Object { $_.name -eq 'SwipeClean-ipa' } | Select-Object -First 1
 if (-not $artifact) { throw 'IPA artifact not found' }
 Write-Host "== Artifact $($artifact.name) $([math]::Round($artifact.size_in_bytes / 1MB, 2)) MB"
 
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 $zipPath = Join-Path $DistDir 'swipeclean-artifact.zip'
-$resp = Invoke-GitHub -Path "/repos/$Login/$RepoName/actions/artifacts/$($artifact.id)/zip" -AllowHttpErrors
-if ($resp.StatusCode -eq 302) {
-  Invoke-WebRequest -Uri $resp.Headers.Location -OutFile $zipPath -TimeoutSec 600
-} else {
-  [IO.File]::WriteAllBytes($zipPath, $resp.Content)
-}
-Expand-Archive $zipPath -DestinationPath $DistDir -Force
+Invoke-WebRequest -Uri "$ApiBase/repos/$Owner/$RepoName/actions/artifacts/$($artifact.id)/zip" -Headers $headers -OutFile $zipPath -UseBasicParsing -TimeoutSec 600
+Expand-Archive -Path $zipPath -DestinationPath $DistDir -Force
 Remove-Item $zipPath -Force
-Get-ChildItem $DistDir | Select-Object Name, Length | Format-Table -AutoSize
+
+$ipa = Get-ChildItem $DistDir -Filter '*.ipa' | Select-Object -First 1
+if (-not $ipa) { throw 'IPA was not unpacked' }
+Write-Host "== IPA: $($ipa.FullName) ($([math]::Round($ipa.Length / 1KB)) KB)"
 Write-Host '== DONE'
