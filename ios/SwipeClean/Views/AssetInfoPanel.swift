@@ -32,28 +32,7 @@ struct AssetInfoPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Capsule()
-                .fill(Color.white.opacity(0.22))
-                .frame(width: 36, height: 4)
-                .padding(.top, 10)
-
-            HStack {
-                Text(asset.mediaType == .video ? "视频详情" : "照片详情")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 34, height: 34)
-                }
-                .floatingGlass(Circle())
-                .accessibilityLabel("收起详情")
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 6)
-            .padding(.bottom, 4)
+            headerArea
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
@@ -129,6 +108,36 @@ struct AssetInfoPanel: View {
         )
         .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 14)
         .offset(y: max(0, dragOffset))
+        .onAppear(perform: load)
+    }
+
+    /// Only the handle and title row drag; the body scrolls normally.
+    private var headerArea: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Color.white.opacity(0.22))
+                .frame(width: 36, height: 4)
+                .padding(.top, 10)
+
+            HStack {
+                Text(asset.mediaType == .video ? "视频详情" : "照片详情")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 34, height: 34)
+                }
+                .floatingGlass(Circle())
+                .accessibilityLabel("收起详情")
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
+        }
+        .contentShape(Rectangle())
         .gesture(
             DragGesture()
                 .onChanged { value in
@@ -143,7 +152,6 @@ struct AssetInfoPanel: View {
                     dragOffset = 0
                 }
         )
-        .onAppear(perform: load)
     }
 
     // MARK: - Location
