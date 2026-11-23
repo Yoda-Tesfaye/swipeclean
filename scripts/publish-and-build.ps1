@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$RepoName = 'swipeclean',
     [string]$Owner = '',
     [switch]$Public
@@ -187,8 +187,9 @@ Invoke-WebRequest -Uri "$ApiBase/repos/$Owner/$RepoName/actions/artifacts/$($art
 Expand-Archive -Path $zipPath -DestinationPath $DistDir -Force
 Remove-Item $zipPath -Force
 
-$ipa = Get-ChildItem $DistDir -Filter '*.ipa' | Select-Object -First 1
+$ipa = Get-ChildItem $DistDir -Filter '*.ipa' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $ipa) { throw 'IPA was not unpacked' }
 Write-Host "== IPA: $($ipa.FullName) ($([math]::Round($ipa.Length / 1KB)) KB)"
 Write-Host '== DONE'
 exit 0
+

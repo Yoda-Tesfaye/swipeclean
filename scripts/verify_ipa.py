@@ -1,4 +1,4 @@
-"""Sanity-check an unsigned iOS .ipa without Xcode.
+﻿"""Sanity-check an unsigned iOS .ipa without Xcode.
 
 Checks performed:
   * IPA is a zip with a single Payload/*.app
@@ -19,7 +19,7 @@ import zipfile
 CPU_TYPE_ARM64 = 0x0100000C
 MH_MAGIC_64 = 0xFEEDFACF
 
-EXPECTED_STRINGS = ["SwipeClean", "确认删除", "删除备选"]
+EXPECTED_STRINGS = ["SwipeClean", "删除后会移入「最近删除」", "让所有内容重新随机出现", "想再刷一遍"]
 
 
 def fail(message):
@@ -85,3 +85,4 @@ def main(path):
 if __name__ == "__main__":
     target = sys.argv[1] if len(sys.argv) > 1 else os.path.join("dist", "SwipeClean-1.0.0-unsigned.ipa")
     sys.exit(main(target))
+
