@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$RepoName = 'swipeclean',
     [string]$Owner = '',
     [switch]$Public
@@ -37,6 +37,50 @@ function Invoke-Native {
         $ErrorActionPreference = $previous
     }
     return [pscustomobject]@{ Output = $output; Code = $code }
+}
+
+# Fallback when github.com:443 is unreachable but api.github.com still answers:
+# build a commit through the Git Data API and dispatch the workflow by hand.
+function Push-GitHubAPI {
+    param(
+        [string]$OwnerName,
+        [string]$RepoNameParam,
+        [hashtable]$HeadersParam,
+        [string]$Message
+    )
+
+    $fileList = (Invoke-Native -FilePath 'git' -Arguments @('ls-files')).Output |
+        Where-Object { $_ -and (Test-Path (Join-Path $RepoRoot $_)) }
+
+    $treeEntries = @()
+    foreach ($file in $fileList) {
+        $bytes = [IO.File]::ReadAllBytes((Join-Path $RepoRoot $file))
+        $blobBody = @{ content = [Convert]::ToBase64String($bytes); encoding = 'base64' } | ConvertTo-Json -Compress
+        $blob = Invoke-RestMethod -Method Post -Uri "$ApiBase/repos/$OwnerName/$RepoNameParam/git/blobs" -Headers $HeadersParam -Body $blobBody -ContentType 'application/json' -TimeoutSec 120
+        $treeEntries += @{ path = ($file -replace '\\', '/'); mode = '100644'; type = 'blob'; sha = $blob.sha }
+    }
+
+    $treeBody = @{ tree = $treeEntries } | ConvertTo-Json -Depth 6 -Compress
+    $tree = Invoke-RestMethod -Method Post -Uri "$ApiBase/repos/$OwnerName/$RepoNameParam/git/trees" -Headers $HeadersParam -Body $treeBody -ContentType 'application/json' -TimeoutSec 120
+
+    $parent = $null
+    try {
+        $ref = Invoke-RestMethod -Uri "$ApiBase/repos/$OwnerName/$RepoNameParam/git/ref/heads/main" -Headers $HeadersParam -TimeoutSec 60
+        $parent = $ref.object.sha
+    } catch { }
+
+    $commitPayload = if ($parent) {
+        @{ message = $Message; tree = $tree.sha; parents = @($parent) }
+    } else {
+        @{ message = $Message; tree = $tree.sha; parents = @() }
+    }
+    $commitBody = $commitPayload | ConvertTo-Json -Depth 5 -Compress
+    $commit = Invoke-RestMethod -Method Post -Uri "$ApiBase/repos/$OwnerName/$RepoNameParam/git/commits" -Headers $HeadersParam -Body $commitBody -ContentType 'application/json' -TimeoutSec 120
+
+    $refBody = @{ sha = $commit.sha; force = $true } | ConvertTo-Json -Compress
+    Invoke-RestMethod -Method Patch -Uri "$ApiBase/repos/$OwnerName/$RepoNameParam/git/refs/heads/main" -Headers $HeadersParam -Body $refBody -ContentType 'application/json' -TimeoutSec 60 | Out-Null
+
+    return $commit.sha
 }
 
 function Get-StoredToken {
@@ -125,12 +169,19 @@ $push = Invoke-Native -FilePath 'git' -Arguments @(
     'push', "https://github.com/$Owner/$RepoName.git", 'HEAD:refs/heads/main', '--force'
 )
 $push.Output | Select-Object -Last 4 | ForEach-Object { Write-Host $_ }
-if ($push.Code -ne 0) {
-    throw 'git push failed. If GitHub rejects workflow files, grant the workflow scope or add .github/workflows through the web UI.'
+
+if ($push.Code -eq 0) {
+    $head = Invoke-Native -FilePath 'git' -Arguments @('rev-parse', 'HEAD')
+    $headSha = ($head.Output | Select-Object -First 1).Trim()
+} else {
+    Write-Host '== github.com:443 is unreachable; publishing through the GitHub API instead'
+    $headSha = Push-GitHubAPI -OwnerName $Owner -RepoNameParam $RepoName -HeadersParam $headers -Message 'chore: update SwipeClean'
+    $dispatchBody = @{ ref = 'main' } | ConvertTo-Json -Compress
+    Invoke-RestMethod -Method Post -Uri "$ApiBase/repos/$Owner/$RepoName/actions/workflows/build-ios-ipa.yml/dispatches" -Headers $headers -Body $dispatchBody -ContentType 'application/json' -TimeoutSec 60 | Out-Null
+    Write-Host '== Workflow dispatched through the API'
 }
-$head = Invoke-Native -FilePath 'git' -Arguments @('rev-parse', 'HEAD')
-$headSha = ($head.Output | Select-Object -First 1).Trim()
-Write-Host "== Pushed $headSha to https://github.com/$Owner/$RepoName"
+if (-not $headSha) { throw 'Could not publish the project.' }
+Write-Host "== Published $headSha to https://github.com/$Owner/$RepoName"
 
 # 4. Find the run for this commit (fall back to the latest run when the push
 #    did not change anything and therefore did not trigger a build).
