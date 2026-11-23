@@ -231,7 +231,7 @@ struct ReviewScreen: View {
         isFavorite = target
         Haptics.tap()
         PHPhotoLibrary.shared().performChanges({
-            PHAssetChangeRequest(for: asset)?.isFavorite = target
+            PHAssetChangeRequest(for: asset).isFavorite = target
         }) { success, _ in
             DispatchQueue.main.async {
                 if success {
