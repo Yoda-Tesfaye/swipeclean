@@ -34,6 +34,10 @@ struct VideoSurface: UIViewRepresentable {
     func updateUIView(_ uiView: PlayerView, context: Context) {
         uiView.set(player: player, hdr: hdr)
     }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: PlayerView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
 }
 
 final class PlayerView: UIView {

@@ -204,24 +204,25 @@ final class ReviewEngine: ObservableObject {
     // MARK: - Batch checkpoint
 
     private func evaluatePosition() {
+        if reviewedInBatch >= batchSize, !bin.isEmpty, pendingBatch == nil {
+            scheduleBatchPrompt()
+            return
+        }
+
         if index >= items.count {
             scheduleFinish()
             return
         }
 
-        guard reviewedInBatch >= batchSize else { return }
-
-        if bin.isEmpty {
+        if reviewedInBatch >= batchSize {
             reviewedInBatch = 0
-            return
         }
+    }
 
-        guard pendingBatch == nil else { return }
-
+    private func scheduleBatchPrompt() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
             guard let self else { return }
             guard self.pendingBatch == nil,
-                  self.phase == .ready,
                   !self.bin.isEmpty,
                   self.reviewedInBatch >= self.batchSize else { return }
             Haptics.warning()
@@ -240,6 +241,9 @@ final class ReviewEngine: ObservableObject {
     func skipBatch() {
         pendingBatch = nil
         reviewedInBatch = 0
+        if index >= items.count {
+            phase = .finished
+        }
     }
 
     func confirmBatchDeletion() {

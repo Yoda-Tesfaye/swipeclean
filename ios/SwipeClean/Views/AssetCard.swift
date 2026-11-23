@@ -70,6 +70,9 @@ struct AssetCard: View {
         .onChange(of: useHDR) { _ in
             loadImage()
         }
+        .onChange(of: target) { _ in
+            loadImage()
+        }
     }
 
     // MARK: - Verdict overlay

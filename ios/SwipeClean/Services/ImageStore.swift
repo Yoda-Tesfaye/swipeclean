@@ -21,8 +21,9 @@ final class ImageStore {
 
     static func target(for size: CGSize) -> CGSize {
         let scale = UIScreen.main.scale
-        return CGSize(width: max(size.width, 1) * scale,
-                      height: max(size.height, 1) * scale)
+        let width = min(max(size.width, 120), 1600)
+        let height = min(max(size.height, 120), 2400)
+        return CGSize(width: width * scale, height: height * scale)
     }
 
     private func key(_ asset: PHAsset, _ size: CGSize, _ hdr: Bool) -> NSString {
@@ -43,7 +44,7 @@ final class ImageStore {
         }
 
         let options = PHImageRequestOptions()
-        options.deliveryMode = hdr ? .highQualityFormat : .opportunistic
+        options.deliveryMode = .highQualityFormat
         options.resizeMode = hdr ? .exact : .fast
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false

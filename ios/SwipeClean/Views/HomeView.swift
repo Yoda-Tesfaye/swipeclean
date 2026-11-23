@@ -51,9 +51,9 @@ struct TabBar: View {
                     .shadow(color: Color.black.opacity(0.35), radius: 16, x: 0, y: 8)
 
                 Capsule()
-                    .frame(width: itemWidth - 6, height: barHeight - 12)
+                    .frame(width: itemWidth - 2, height: barHeight - 8)
                     .floatingGlass(Capsule())
-                    .offset(x: baseX + dragTranslation + 3, y: 6)
+                    .offset(x: baseX + dragTranslation + 1, y: 4)
 
                 HStack(spacing: 0) {
                     ForEach(HomeTab.allCases) { tab in

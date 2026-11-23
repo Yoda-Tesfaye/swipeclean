@@ -22,6 +22,13 @@ struct HDRImageView: UIViewRepresentable {
         apply(to: view)
     }
 
+    /// Without this the image view reports its intrinsic (pixel) size and the
+    /// card shows a 1:1 crop instead of the whole photo.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIImageView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width,
+               height: proposal.height ?? uiView.intrinsicContentSize.height)
+    }
+
     private func apply(to view: UIImageView) {
         view.image = image
         if #available(iOS 17.0, *) {

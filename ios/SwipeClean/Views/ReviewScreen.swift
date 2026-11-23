@@ -53,8 +53,10 @@ struct ReviewScreen: View {
                 .transition(.opacity)
             }
         }
-        .sheet(isPresented: $showBin) {
-            BinSheet(engine: engine)
+        .sheet(item: $engine.pendingBatch, onDismiss: {
+            engine.skipBatch()
+        }) { _ in
+            BatchSheet(engine: engine)
         }
         .onAppear(perform: syncFavorite)
         .onChange(of: engine.index) { _ in
@@ -78,11 +80,6 @@ struct ReviewScreen: View {
                             swipeHint
                                 .padding(.top, 74)
                         }
-                    }
-                    .sheet(item: $engine.pendingBatch, onDismiss: {
-                        engine.skipBatch()
-                    }) { _ in
-                        BatchSheet(engine: engine)
                     }
 
                 header
@@ -161,6 +158,9 @@ struct ReviewScreen: View {
         .opacity(chromeVisible ? 1 : 0)
         .allowsHitTesting(chromeVisible)
         .animation(.easeOut(duration: 0.18), value: chromeVisible)
+        .sheet(isPresented: $showBin) {
+            BinSheet(engine: engine)
+        }
     }
 
     // MARK: - Bottom controls

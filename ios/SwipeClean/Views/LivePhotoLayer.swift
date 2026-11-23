@@ -36,6 +36,11 @@ struct LivePhotoSurface: UIViewRepresentable {
             view.startPlayback(with: .full)
         }
     }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: PHLivePhotoView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width,
+               height: proposal.height ?? uiView.intrinsicContentSize.height)
+    }
 }
 
 final class LivePhotoLoader: ObservableObject {
