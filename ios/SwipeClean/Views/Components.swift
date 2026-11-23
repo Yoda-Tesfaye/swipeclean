@@ -1,4 +1,63 @@
 import SwiftUI
+import Photos
+import UIKit
+
+/// A Liquid-Glass inspired treatment: translucent material, a specular edge
+/// and a soft floating shadow. Uses public Material APIs so it runs on iOS 16+.
+extension View {
+    func glassSurface<S: InsettableShape>(_ shape: S) -> some View {
+        self
+            .background(shape.fill(.ultraThinMaterial))
+            .overlay(
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.45), Color.white.opacity(0.06)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 8)
+    }
+}
+
+/// Blurred, darkened copy of the current asset behind the deck, like the
+/// ambient wallpaper the reference app builds its glass controls on.
+struct AmbientBackground: View {
+    let asset: PHAsset?
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack {
+            Theme.background
+
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .blur(radius: 48)
+                    .opacity(0.55)
+                    .overlay(Color.black.opacity(0.35))
+                    .ignoresSafeArea()
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: asset?.localIdentifier)
+        .onAppear(perform: load)
+        .onChange(of: asset?.localIdentifier) { _ in
+            load()
+        }
+    }
+
+    private func load() {
+        guard let asset else { return }
+        ImageStore.shared.load(for: asset, target: CGSize(width: 90, height: 90)) { loaded in
+            guard let loaded else { return }
+            image = loaded
+        }
+    }
+}
 
 struct ToastView: View {
     let text: String
@@ -20,6 +79,7 @@ struct CircleAction: View {
     let title: String
     let tint: Color
     let iconColor: Color
+    var usesMaterial: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -29,8 +89,24 @@ struct CircleAction: View {
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(iconColor)
                     .frame(width: 64, height: 64)
-                    .background(Circle().fill(tint))
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                    .background {
+                        if usesMaterial {
+                            Circle().fill(.ultraThinMaterial)
+                        } else {
+                            Circle().fill(tint)
+                        }
+                    }
+                    .overlay(
+                        Circle().strokeBorder(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.5), Color.white.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                    )
+                    .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 6)
             }
             .buttonStyle(.plain)
 

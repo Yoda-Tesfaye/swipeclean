@@ -54,13 +54,7 @@ struct TabBar: View {
             }
         }
         .padding(5)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
+        .glassSurface(Capsule())
         .padding(.horizontal, 46)
         .padding(.bottom, 8)
     }
@@ -75,21 +69,26 @@ struct DeckHome: View {
     @State private var showBin = false
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 18)
-                    .padding(.top, 4)
+        ZStack {
+            AmbientBackground(asset: engine.current)
+                .ignoresSafeArea()
 
-                Spacer(minLength: 8)
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    header
+                        .padding(.horizontal, 18)
+                        .padding(.top, 4)
 
-                content(size: geo.size)
+                    Spacer(minLength: 8)
 
-                Spacer(minLength: 8)
+                    content(size: geo.size)
 
-                footer
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 104)
+                    Spacer(minLength: 8)
+
+                    footer
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 104)
+                }
             }
         }
         .fullScreenCover(isPresented: $showReview) {
@@ -140,8 +139,7 @@ struct DeckHome: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(Capsule().fill(Color.white.opacity(0.08)))
-                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .glassSurface(Capsule())
             }
 
             Spacer(minLength: 0)
@@ -159,8 +157,7 @@ struct DeckHome: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(Capsule().fill(Color.white.opacity(engine.bin.isEmpty ? 0.06 : 0.16)))
-                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .glassSurface(Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -266,7 +263,7 @@ struct FanStack: View {
     }
 
     private func card(_ asset: PHAsset, size: CGSize) -> some View {
-        AssetCard(asset: asset, target: ImageStore.target(for: size), isCurrent: false)
+        AssetCard(asset: asset, target: ImageStore.target(for: size), isCurrent: false, fills: true)
             .frame(width: size.width, height: size.height)
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)

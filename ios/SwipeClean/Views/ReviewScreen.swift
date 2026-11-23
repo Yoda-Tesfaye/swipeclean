@@ -11,7 +11,8 @@ struct ReviewScreen: View {
 
     var body: some View {
         ZStack {
-            Theme.background.ignoresSafeArea()
+            AmbientBackground(asset: engine.current)
+                .ignoresSafeArea()
 
             switch engine.phase {
             case .loading:
@@ -110,8 +111,7 @@ struct ReviewScreen: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .background(Capsule().fill(Color.white.opacity(engine.bin.isEmpty ? 0.06 : 0.16)))
-                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .glassSurface(Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -139,7 +139,7 @@ struct ReviewScreen: View {
                         .foregroundColor(Theme.textSecondary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.white.opacity(0.06)))
+                        .glassSurface(Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -147,8 +147,9 @@ struct ReviewScreen: View {
             HStack(spacing: 46) {
                 CircleAction(icon: "checkmark",
                              title: "保留",
-                             tint: Color.white.opacity(0.13),
-                             iconColor: .white) {
+                             tint: .clear,
+                             iconColor: .white,
+                             usesMaterial: true) {
                     engine.moveForward()
                 }
 
@@ -265,8 +266,7 @@ struct CircleIconButton: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 38, height: 38)
-                .background(Circle().fill(Color.white.opacity(0.10)))
-                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                .glassSurface(Circle())
         }
         .buttonStyle(.plain)
     }

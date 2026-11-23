@@ -55,6 +55,7 @@ struct CardPager: View {
     private func cardView(page: Page, size: CGSize, target: CGSize) -> some View {
         let isCurrent = page.index == engine.index
         let offsetX = CGFloat(page.index - engine.index) * size.width + drag.width
+        let cardSize = Self.fittedSize(for: page.asset, in: size)
 
         var verdict: CardVerdict = .none
         if isCurrent {
@@ -71,11 +72,25 @@ struct CardPager: View {
                          isCurrent: isCurrent,
                          verdict: verdict,
                          verdictProgress: progress)
-            .frame(width: size.width, height: size.height)
+            .frame(width: cardSize.width, height: cardSize.height)
             .scaleEffect(isCurrent ? 1 : 0.93)
             .opacity(isCurrent ? 1 : 0.7)
             .offset(x: offsetX, y: isCurrent ? drag.height : 0)
             .zIndex(isCurrent ? 1 : 0)
+    }
+
+    /// Native aspect ratio, limited by the available box. No letterboxing.
+    static func fittedSize(for asset: PHAsset, in container: CGSize) -> CGSize {
+        let width = max(CGFloat(asset.pixelWidth), 1)
+        let height = max(CGFloat(asset.pixelHeight), 1)
+        let ratio = width / height
+        var fittedWidth = container.width
+        var fittedHeight = fittedWidth / ratio
+        if fittedHeight > container.height {
+            fittedHeight = container.height
+            fittedWidth = fittedHeight * ratio
+        }
+        return CGSize(width: max(fittedWidth, 1), height: max(fittedHeight, 1))
     }
 
     // MARK: - Gesture
