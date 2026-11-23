@@ -75,7 +75,8 @@ final class VideoLoader: ObservableObject {
                 guard self.currentID == asset.localIdentifier else { return }
                 let item = AVPlayerItem(asset: avAsset)
                 let player = AVPlayer(playerItem: item)
-                player.isMuted = true
+                player.isMuted = false
+                AudioSession.activatePlayback()
                 player.actionAtItemEnd = .none
                 self.observer = NotificationCenter.default.addObserver(
                     forName: .AVPlayerItemDidPlayToEndTime,

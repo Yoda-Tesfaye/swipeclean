@@ -50,6 +50,13 @@ struct AssetCard: View {
                         .allowsHitTesting(false)
                 }
 
+                if isCurrent, asset.mediaType == .image, asset.mediaSubtypes.contains(.photoLive) {
+                    LivePhotoLayer(asset: asset)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .allowsHitTesting(false)
+                }
+
                 verdictOverlay
             }
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))

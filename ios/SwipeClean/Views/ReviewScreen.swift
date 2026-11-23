@@ -79,6 +79,11 @@ struct ReviewScreen: View {
                                 .padding(.top, 74)
                         }
                     }
+                    .sheet(item: $engine.pendingBatch, onDismiss: {
+                        engine.skipBatch()
+                    }) { _ in
+                        BatchSheet(engine: engine)
+                    }
 
                 header
 
@@ -261,16 +266,39 @@ struct ReviewScreen: View {
         let target = !isFavorite
         isFavorite = target
         Haptics.tap()
+
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard status == .authorized || status == .limited else {
+            isFavorite = !target
+            Haptics.warning()
+            engine.showToast("需要相册写入权限，请到设置里开启")
+            return
+        }
+
         PHPhotoLibrary.shared().performChanges({
-            PHAssetChangeRequest(for: asset).isFavorite = target
-        }) { success, _ in
+            let request = PHAssetChangeRequest(for: asset)
+            request.isFavorite = target
+        }) { success, error in
             DispatchQueue.main.async {
-                if success {
-                    engine.showToast(target ? "已收藏" : "已取消收藏")
-                } else {
+                guard success else {
                     isFavorite = !target
                     Haptics.warning()
-                    engine.showToast("操作失败，请重试")
+                    engine.showToast(error?.localizedDescription ?? "收藏失败，请检查相册权限")
+                    return
+                }
+
+                // Read the value back from the library: limited access can
+                // report success without the favorite sticking.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    let refreshed = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil).firstObject
+                    let actual = refreshed?.isFavorite ?? target
+                    isFavorite = actual
+                    if actual == target {
+                        engine.showToast(target ? "已收藏，已同步到相册" : "已取消收藏")
+                    } else {
+                        Haptics.warning()
+                        engine.showToast("相册未同步，请把照片权限改为「完全访问」")
+                    }
                 }
             }
         }
