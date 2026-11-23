@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import Photos
 
 struct HomeView: View {
@@ -50,7 +50,7 @@ struct TabBar: View {
                         Capsule().fill(selection == tab ? Color.white.opacity(0.16) : Color.clear)
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
             }
         }
         .padding(5)
@@ -323,7 +323,7 @@ struct StatusCard: View {
                     .padding(.vertical, 14)
                     .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Theme.accent))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle())
             .padding(.top, 6)
 
             if let secondaryTitle, let secondaryAction {
@@ -346,3 +346,4 @@ struct StatusCard: View {
         )
     }
 }
+

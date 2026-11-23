@@ -9,6 +9,7 @@ struct ReviewScreen: View {
     @State private var chromeVisible = true
     @State private var showBin = false
     @State private var showDetails = false
+    @State private var isFavorite = false
 
     var body: some View {
         ZStack {
@@ -53,6 +54,10 @@ struct ReviewScreen: View {
                 AssetDetailSheet(asset: asset)
             }
         }
+        .onAppear(perform: syncFavorite)
+        .onChange(of: engine.index) { _ in
+            syncFavorite()
+        }
     }
 
     // MARK: - Ready
@@ -68,6 +73,12 @@ struct ReviewScreen: View {
             CardPager(engine: engine, chromeVisible: $chromeVisible)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
+                .overlay(alignment: .top) {
+                    if engine.reviewedCount == 0 {
+                        swipeHint
+                            .padding(.top, 6)
+                    }
+                }
                 .sheet(item: $engine.pendingBatch, onDismiss: {
                     engine.skipBatch()
                 }) { _ in
@@ -135,71 +146,103 @@ struct ReviewScreen: View {
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 12) {
-            if engine.canUndo {
-                Button {
-                    engine.undoLastAction()
-                } label: {
-                    Label("撤销上一步", systemImage: "arrow.uturn.backward")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Theme.textSecondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .glassSurface(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
+        VStack(spacing: 10) {
+            HStack(spacing: 0) {
+                Spacer()
 
-            if engine.current != nil {
-                Button {
+                bottomControl(icon: isFavorite ? "heart.fill" : "heart",
+                              label: "收藏",
+                              tint: isFavorite ? Theme.danger : .white) {
+                    toggleFavorite()
+                }
+
+                Spacer()
+
+                bottomControl(icon: "info.circle",
+                              label: "详情",
+                              tint: .white) {
                     showDetails = true
-                } label: {
-                    HStack(spacing: 7) {
-                        Text(relativeDateText)
-                            .font(.system(size: 13, weight: .semibold))
-                            .monospacedDigit()
-                        Image(systemName: "info.circle.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Theme.textSecondary)
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .glassSurface(Capsule())
                 }
-                .buttonStyle(.plain)
+
+                Spacer()
+
+                bottomControl(icon: "arrow.uturn.backward",
+                              label: "撤回",
+                              tint: engine.bin.isEmpty ? Theme.textTertiary : .white,
+                              enabled: !engine.bin.isEmpty) {
+                    engine.undoLastAction()
+                }
+
+                Spacer()
             }
+            .padding(.horizontal, 8)
 
-            HStack(spacing: 46) {
-                CircleAction(icon: "checkmark",
-                             title: "保留",
-                             tint: .clear,
-                             iconColor: .white,
-                             usesMaterial: true) {
-                    engine.moveForward()
-                }
-
-                CircleAction(icon: "trash.fill",
-                             title: "删除",
-                             tint: Theme.danger,
-                             iconColor: .white) {
-                    engine.markCurrentForDeletion()
-                }
-            }
-
-            Text("上划删除 · 下划撤销 · 左右切换")
+            Text("上滑删除 · 左右切换")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Theme.textTertiary)
         }
     }
 
-    private var relativeDateText: String {
-        guard let date = engine.current?.creationDate else { return "详情" }
-        let components = Calendar.current.dateComponents([.year, .month, .day], from: date, to: Date())
-        if let years = components.year, years >= 1 { return "\(years) 年前" }
-        if let months = components.month, months >= 1 { return "\(months) 个月前" }
-        if let days = components.day, days >= 1 { return "\(days) 天前" }
-        return "今天"
+    private func bottomControl(icon: String,
+                               label: String,
+                               tint: Color,
+                               enabled: Bool = true,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundColor(tint)
+                    .frame(width: 52, height: 52)
+                    .glassSurface(Circle())
+
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Theme.textSecondary)
+            }
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+        .accessibilityLabel(label)
+    }
+
+    private var swipeHint: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "chevron.up")
+                .font(.system(size: 10, weight: .bold))
+            Text("上滑删除")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .foregroundColor(.white.opacity(0.8))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .glassSurface(Capsule())
+        .transition(.opacity)
+    }
+
+    private func syncFavorite() {
+        isFavorite = engine.current?.isFavorite ?? false
+    }
+
+    private func toggleFavorite() {
+        guard let asset = engine.current else { return }
+        let target = !isFavorite
+        isFavorite = target
+        Haptics.tap()
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest(for: asset)?.isFavorite = target
+        }) { success, _ in
+            DispatchQueue.main.async {
+                if success {
+                    engine.showToast(target ? "已收藏" : "已取消收藏")
+                } else {
+                    isFavorite = !target
+                    Haptics.warning()
+                    engine.showToast("操作失败，请重试")
+                }
+            }
+        }
     }
 
     // MARK: - Empty
@@ -300,9 +343,10 @@ struct CircleIconButton: View {
             Image(systemName: icon)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 38, height: 38)
+                .frame(width: 44, height: 44)
                 .glassSurface(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel(icon == "chevron.left" ? "返回" : "关闭")
     }
 }

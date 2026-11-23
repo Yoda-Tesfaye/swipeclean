@@ -7,6 +7,7 @@ import Photos
 struct CardPager: View {
     @ObservedObject var engine: ReviewEngine
     @Binding var chromeVisible: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var drag: CGSize = .zero
     @State private var busy = false
@@ -14,7 +15,10 @@ struct CardPager: View {
     @State private var axis: DragAxis?
 
     private var spring: Animation {
-        .interactiveSpring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.2)
+        if reduceMotion {
+            return .easeOut(duration: 0.16)
+        }
+        return .interactiveSpring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.2)
     }
 
     private struct Page: Identifiable {
@@ -37,6 +41,12 @@ struct CardPager: View {
             .contentShape(Rectangle())
             .gesture(dragGesture(size: size))
             .onTapGesture { toggleChrome() }
+            .accessibilityAction(named: Text("删除")) {
+                engine.markCurrentForDeletion()
+            }
+            .accessibilityAction(named: Text("保留")) {
+                engine.moveForward()
+            }
         }
     }
 
@@ -195,7 +205,7 @@ struct CardPager: View {
                 engine.moveBackward()
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             busy = false
         }
     }
@@ -203,7 +213,7 @@ struct CardPager: View {
     private func commitDelete(size: CGSize) {
         busy = true
         Haptics.commit()
-        withAnimation(.easeIn(duration: 0.18)) {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .easeIn(duration: 0.18)) {
             drag = CGSize(width: 0, height: -size.height * 1.25)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
@@ -224,7 +234,7 @@ struct CardPager: View {
         }
         busy = true
         Haptics.bump()
-        withAnimation(.easeIn(duration: 0.16)) {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .easeIn(duration: 0.16)) {
             drag = CGSize(width: 0, height: size.height * 1.25)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.17) {

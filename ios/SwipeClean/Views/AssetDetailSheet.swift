@@ -2,11 +2,11 @@ import SwiftUI
 import Photos
 import ImageIO
 import CoreLocation
+import MapKit
 import UIKit
 
 /// The "详情" sheet behind the ⓘ button: date, dimensions, file info, camera
-/// settings and the capture location. All metadata comes from public PhotoKit
-/// and ImageIO APIs.
+/// settings and a live MapKit snippet for the capture location.
 struct AssetDetailSheet: View {
     let asset: PHAsset
     @Environment(\.dismiss) private var dismiss
@@ -14,9 +14,20 @@ struct AssetDetailSheet: View {
     @State private var properties: [String: Any] = [:]
     @State private var fileName: String = ""
     @State private var fileSizeText: String = ""
-    @State private var placeText: String = ""
-    @State private var coordinateText: String = ""
+    @State private var placeName: String = ""
+    @State private var areaName: String = ""
+    @State private var elevationText: String = ""
+    @State private var pins: [MapPoint] = []
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+    )
     @State private var isLoading = true
+
+    private struct MapPoint: Identifiable {
+        let id = UUID()
+        let coordinate: CLLocationCoordinate2D
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -53,15 +64,9 @@ struct AssetDetailSheet: View {
                     }
                 }
 
-                if !coordinateText.isEmpty {
+                if !pins.isEmpty {
                     sectionTitle("拍摄位置")
-                    card {
-                        row("坐标", coordinateText)
-                        if !placeText.isEmpty {
-                            divider
-                            row("地点", placeText)
-                        }
-                    }
+                    locationCard
                 }
 
                 if isLoading {
@@ -101,6 +106,67 @@ struct AssetDetailSheet: View {
         }
         .padding(.top, 10)
         .padding(.bottom, 2)
+    }
+
+    // MARK: - Location
+
+    private var locationCard: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .bottomTrailing) {
+                Map(coordinateRegion: $region,
+                    interactionModes: [],
+                    showsUserLocation: false,
+                    annotationItems: pins) { pin in
+                    MapMarker(coordinate: pin.coordinate, tint: Theme.success)
+                }
+                .frame(height: 156)
+
+                if !elevationText.isEmpty {
+                    Text(elevationText)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.black.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.white.opacity(0.92)))
+                        .padding(10)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(placeName.isEmpty ? "未知地点" : placeName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Text(areaName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
+
+            if !coordinateText.isEmpty {
+                Rectangle()
+                    .fill(Theme.hairline)
+                    .frame(height: 1)
+                row("坐标", coordinateText)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.surface))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    private var coordinateText: String {
+        guard let location = asset.location else { return "" }
+        return String(format: "%.4f, %.4f", location.coordinate.latitude, location.coordinate.longitude)
     }
 
     // MARK: - Cards
@@ -206,8 +272,13 @@ struct AssetDetailSheet: View {
 
     private func load() {
         fileName = PHAssetResource.assetResources(for: asset).first?.originalFilename ?? ""
+
         if let location = asset.location {
-            coordinateText = String(format: "%.4f, %.4f", location.coordinate.latitude, location.coordinate.longitude)
+            region = MKCoordinateRegion(
+                center: location.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+            )
+            pins = [MapPoint(coordinate: location.coordinate)]
             reverseGeocode(location)
         }
 
@@ -229,19 +300,33 @@ struct AssetDetailSheet: View {
                 guard let source = CGImageSourceCreateWithData(data as CFData, nil),
                       let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else { return }
                 properties = props
+                elevationText = elevation(from: props)
             }
         }
+    }
+
+    private func elevation(from props: [String: Any]) -> String {
+        guard let gps = props[kCGImagePropertyGPSDictionary as String] as? [String: Any],
+              let altitude = gps[kCGImagePropertyGPSAltitude as String] as? Double else {
+            return ""
+        }
+        let ref = gps[kCGImagePropertyGPSAltitudeRef as String] as? Int ?? 0
+        let meters = ref == 1 ? -altitude : altitude
+        return "海拔 \(Int(meters.rounded())) m"
     }
 
     private func reverseGeocode(_ location: CLLocation) {
         let geocoder = CLGeocoder()
         geocoder.reverseGeocodeLocation(location) { placemarks, _ in
             guard let placemark = placemarks?.first else { return }
-            let parts = [placemark.locality, placemark.subLocality, placemark.name]
+            let name = placemark.name ?? placemark.subLocality ?? placemark.locality ?? ""
+            let area = [placemark.locality, placemark.subLocality]
                 .compactMap { $0 }
-                .filter { !$0.isEmpty }
+                .filter { !$0.isEmpty && $0 != name }
+                .joined(separator: " ")
             DispatchQueue.main.async {
-                placeText = parts.joined(separator: " · ")
+                placeName = name
+                areaName = area
             }
         }
     }

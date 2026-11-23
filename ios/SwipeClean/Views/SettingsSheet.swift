@@ -75,7 +75,7 @@ struct SettingsSheet: View {
                         .font(.system(size: 12))
                         .foregroundColor(Theme.textSecondary)
                     Spacer()
-                    Text("1.3.0")
+                    Text("1.4.0")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white)
                 }
@@ -145,5 +145,6 @@ struct SettingsSheet: View {
         }
     }
 }
+
 
 

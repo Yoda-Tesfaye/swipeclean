@@ -65,6 +65,18 @@ struct AmbientBackground: View {
     }
 }
 
+/// Press starts the feedback immediately: the control scales down on touch-down
+/// and springs back on release (Apple's first principle: respond instantly).
+struct PressableStyle: ButtonStyle {
+    var scale: CGFloat = 0.96
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
 struct ToastView: View {
     let text: String
 

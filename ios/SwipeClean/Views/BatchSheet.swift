@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import Photos
 
 /// Shown every `batchSize` reviewed items, styled like the reference app:
@@ -62,7 +62,7 @@ struct BatchSheet: View {
                         .padding(.vertical, 17)
                         .background(Capsule().fill(Color.white.opacity(0.16)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
 
                 Button {
                     engine.confirmBatchDeletion()
@@ -74,7 +74,7 @@ struct BatchSheet: View {
                         .padding(.vertical, 17)
                         .background(Capsule().fill(Theme.danger))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
                 .disabled(engine.bin.isEmpty)
                 .opacity(engine.bin.isEmpty ? 0.45 : 1)
             }
@@ -92,3 +92,4 @@ struct BatchSheet: View {
         .presentationDragIndicator(.hidden)
     }
 }
+
