@@ -232,29 +232,36 @@ struct FanStack: View {
 
     var body: some View {
         GeometryReader { geo in
-            let width = min(geo.size.width * 0.64, 300)
-            let height = min(width * 1.42, max(geo.size.height - 12, 200))
+            let maxWidth = min(geo.size.width * 0.60, 310)
+            let ratio = aspectRatio(of: engine.current)
+            var width = maxWidth
+            var height = width / ratio
+            let maxHeight = max(geo.size.height - 10, 160)
+            if height > maxHeight {
+                height = maxHeight
+                width = height * ratio
+            }
             let size = CGSize(width: width, height: height)
 
             ZStack {
                 if engine.index + 2 < engine.items.count {
-                    card(engine.items[engine.index + 2], size: size)
+                    card(engine.items[engine.index + 2], size: size, fill: true)
                         .rotationEffect(.degrees(9))
-                        .offset(x: width * 0.11, y: -height * 0.02)
+                        .offset(x: size.width * 0.11, y: -size.height * 0.02)
                         .scaleEffect(0.88)
                         .opacity(0.55)
                 }
 
                 if engine.index + 1 < engine.items.count {
-                    card(engine.items[engine.index + 1], size: size)
+                    card(engine.items[engine.index + 1], size: size, fill: true)
                         .rotationEffect(.degrees(-8))
-                        .offset(x: -width * 0.06, y: -height * 0.01)
+                        .offset(x: -size.width * 0.06, y: -size.height * 0.01)
                         .scaleEffect(0.94)
                         .opacity(0.8)
                 }
 
                 if let asset = engine.current {
-                    card(asset, size: size)
+                    card(asset, size: size, fill: false)
                         .onTapGesture(perform: onTap)
                 }
             }
@@ -262,8 +269,13 @@ struct FanStack: View {
         }
     }
 
-    private func card(_ asset: PHAsset, size: CGSize) -> some View {
-        AssetCard(asset: asset, target: ImageStore.target(for: size), isCurrent: false, fills: true)
+    private func aspectRatio(of asset: PHAsset?) -> CGFloat {
+        guard let asset, asset.pixelWidth > 0, asset.pixelHeight > 0 else { return 0.75 }
+        return CGFloat(asset.pixelWidth) / CGFloat(asset.pixelHeight)
+    }
+
+    private func card(_ asset: PHAsset, size: CGSize, fill: Bool) -> some View {
+        AssetCard(asset: asset, target: ImageStore.target(for: size), isCurrent: false, fills: fill)
             .frame(width: size.width, height: size.height)
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)

@@ -30,19 +30,25 @@ struct AmbientBackground: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Theme.background
+        GeometryReader { geo in
+            ZStack {
+                Theme.background
 
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .blur(radius: 48)
-                    .opacity(0.55)
-                    .overlay(Color.black.opacity(0.35))
-                    .ignoresSafeArea()
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .blur(radius: 48)
+                        .opacity(0.55)
+                        .overlay(Color.black.opacity(0.35))
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
+        .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.35), value: asset?.localIdentifier)
         .onAppear(perform: load)
         .onChange(of: asset?.localIdentifier) { _ in

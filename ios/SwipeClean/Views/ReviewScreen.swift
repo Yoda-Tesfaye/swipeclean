@@ -8,6 +8,7 @@ struct ReviewScreen: View {
 
     @State private var chromeVisible = true
     @State private var showBin = false
+    @State private var showDetails = false
 
     var body: some View {
         ZStack {
@@ -46,6 +47,11 @@ struct ReviewScreen: View {
         }
         .sheet(isPresented: $showBin) {
             BinSheet(engine: engine)
+        }
+        .sheet(isPresented: $showDetails) {
+            if let asset = engine.current {
+                AssetDetailSheet(asset: asset)
+            }
         }
     }
 
@@ -144,6 +150,26 @@ struct ReviewScreen: View {
                 .buttonStyle(.plain)
             }
 
+            if engine.current != nil {
+                Button {
+                    showDetails = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Text(relativeDateText)
+                            .font(.system(size: 13, weight: .semibold))
+                            .monospacedDigit()
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .glassSurface(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
             HStack(spacing: 46) {
                 CircleAction(icon: "checkmark",
                              title: "保留",
@@ -165,6 +191,15 @@ struct ReviewScreen: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Theme.textTertiary)
         }
+    }
+
+    private var relativeDateText: String {
+        guard let date = engine.current?.creationDate else { return "详情" }
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date, to: Date())
+        if let years = components.year, years >= 1 { return "\(years) 年前" }
+        if let months = components.month, months >= 1 { return "\(months) 个月前" }
+        if let days = components.day, days >= 1 { return "\(days) 天前" }
+        return "今天"
     }
 
     // MARK: - Empty
