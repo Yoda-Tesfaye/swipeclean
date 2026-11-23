@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$RepoName = 'swipeclean',
     [string]$Owner = '',
     [switch]$Public
@@ -19,6 +19,25 @@ $ApiBase = 'https://api.github.com'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $DistDir = Join-Path $RepoRoot 'dist'
 $Gcm = 'C:\Program Files\Git\mingw64\bin\git-credential-manager.exe'
+
+# Git writes progress and warnings to stderr; with ErrorActionPreference=Stop
+# Windows PowerShell turns that into a terminating error. Run native commands
+# with Continue and inspect the exit code ourselves.
+function Invoke-Native {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments
+    )
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $FilePath @Arguments 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    return [pscustomobject]@{ Output = @($output); Code = $code }
+}
 
 function Get-StoredToken {
     param([string]$UserName)
@@ -88,24 +107,29 @@ try {
 # 3. Commit and push.
 Set-Location $RepoRoot
 if (-not (Test-Path (Join-Path $RepoRoot '.git'))) {
-    git init -b main | Out-Host
+    $init = Invoke-Native -FilePath 'git' -Arguments @('init', '-b', 'main')
+    $init.Output | Out-Host
 }
-git config user.name $login
-git config user.email "$login@users.noreply.github.com"
-git add -A
-git diff --cached --quiet
-if ($LASTEXITCODE -ne 0) {
-    git commit -m "chore: update SwipeClean" | Out-Host
+Invoke-Native -FilePath 'git' -Arguments @('config', 'user.name', $login) | Out-Null
+Invoke-Native -FilePath 'git' -Arguments @('config', 'user.email', "$login@users.noreply.github.com") | Out-Null
+Invoke-Native -FilePath 'git' -Arguments @('add', '-A') | Out-Null
+$staged = Invoke-Native -FilePath 'git' -Arguments @('diff', '--cached', '--quiet')
+if ($staged.Code -ne 0) {
+    $commit = Invoke-Native -FilePath 'git' -Arguments @('commit', '-m', 'chore: update SwipeClean')
+    $commit.Output | Out-Host
 }
 
 $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$token"))
-$pushOutput = git -c "http.extraheader=Authorization: Basic $basic" push "https://github.com/$Owner/$RepoName.git" HEAD:refs/heads/main --force 2>&1
-$pushExit = $LASTEXITCODE
-$pushOutput | Select-Object -Last 4 | Out-Host
-if ($pushExit -ne 0) {
+$push = Invoke-Native -FilePath 'git' -Arguments @(
+    '-c', "http.extraheader=Authorization: Basic $basic",
+    'push', "https://github.com/$Owner/$RepoName.git", 'HEAD:refs/heads/main', '--force'
+)
+$push.Output | Select-Object -Last 4 | Out-Host
+if ($push.Code -ne 0) {
     throw 'git push failed. If GitHub rejects workflow files, grant the workflow scope or add .github/workflows through the web UI.'
 }
-$headSha = (git rev-parse HEAD).Trim()
+$head = Invoke-Native -FilePath 'git' -Arguments @('rev-parse', 'HEAD')
+$headSha = ($head.Output | Select-Object -First 1).Trim()
 Write-Host "== Pushed $headSha to https://github.com/$Owner/$RepoName"
 
 # 4. Find the run for this commit (fall back to the latest run when the push
@@ -167,4 +191,3 @@ $ipa = Get-ChildItem $DistDir -Filter '*.ipa' | Select-Object -First 1
 if (-not $ipa) { throw 'IPA was not unpacked' }
 Write-Host "== IPA: $($ipa.FullName) ($([math]::Round($ipa.Length / 1KB)) KB)"
 Write-Host '== DONE'
-
