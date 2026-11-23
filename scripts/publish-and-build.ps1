@@ -31,12 +31,12 @@ function Invoke-Native {
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $output = & $FilePath @Arguments 2>&1
+        $output = @(& $FilePath @Arguments 2>&1 | ForEach-Object { "$_" })
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previous
     }
-    return [pscustomobject]@{ Output = @($output); Code = $code }
+    return [pscustomobject]@{ Output = $output; Code = $code }
 }
 
 function Get-StoredToken {
@@ -124,7 +124,7 @@ $push = Invoke-Native -FilePath 'git' -Arguments @(
     '-c', "http.extraheader=Authorization: Basic $basic",
     'push', "https://github.com/$Owner/$RepoName.git", 'HEAD:refs/heads/main', '--force'
 )
-$push.Output | Select-Object -Last 4 | Out-Host
+$push.Output | Select-Object -Last 4 | ForEach-Object { Write-Host $_ }
 if ($push.Code -ne 0) {
     throw 'git push failed. If GitHub rejects workflow files, grant the workflow scope or add .github/workflows through the web UI.'
 }
@@ -191,3 +191,4 @@ $ipa = Get-ChildItem $DistDir -Filter '*.ipa' | Select-Object -First 1
 if (-not $ipa) { throw 'IPA was not unpacked' }
 Write-Host "== IPA: $($ipa.FullName) ($([math]::Round($ipa.Length / 1KB)) KB)"
 Write-Host '== DONE'
+exit 0
