@@ -285,7 +285,6 @@ final class ReviewEngine: ObservableObject {
 
         items.removeAll { identifiers.contains($0.localIdentifier) }
         bin.removeAll { identifiers.contains($0.localIdentifier) }
-        history.remove(identifiers, mode: mode)
         historyCount = history.count(mode: mode)
         deletedCount += assets.count
         stack.removeAll()
