@@ -161,17 +161,56 @@ if ($staged.Code -ne 0) {
     $commit.Output | Out-Host
 }
 
+function Get-RemoteBlobMap {
+    $map = @{}
+    try {
+        $ref = Invoke-Api -Path "/repos/$Owner/$RepoName/git/ref/heads/main"
+        $commit = Invoke-Api -Path "/repos/$Owner/$RepoName/git/commits/$($ref.object.sha)"
+        $tree = Invoke-Api -Path "/repos/$Owner/$RepoName/git/trees/$($commit.tree.sha)?recursive=1"
+        foreach ($entry in $tree.tree) {
+            if ($entry.type -eq 'blob') { $map[$entry.path] = $entry.sha }
+        }
+    } catch { }
+    return $map
+}
+
 function Push-GitHubApi {
+    $remoteBlobs = Get-RemoteBlobMap
     $fileList = (Invoke-Native -FilePath 'git' -Arguments @('ls-files')).Output |
         Where-Object { $_ -and (Test-Path (Join-Path $RepoRoot $_)) }
 
     $treeEntries = @()
+    $uploaded = 0
     foreach ($file in $fileList) {
-        $bytes = [IO.File]::ReadAllBytes((Join-Path $RepoRoot $file))
-        $blobBody = @{ content = [Convert]::ToBase64String($bytes); encoding = 'base64' }
-        $blob = Invoke-Api -Method Post -Path "/repos/$Owner/$RepoName/git/blobs" -Body $blobBody
-        $treeEntries += @{ path = ($file -replace '\\', '/'); mode = '100644'; type = 'blob'; sha = $blob.sha }
+        $relative = $file -replace '\\', '/'
+        $localSha = ((Invoke-Native -FilePath 'git' -Arguments @('hash-object', $file)).Output |
+            Select-Object -First 1).Trim()
+        $sha = $remoteBlobs[$relative]
+        if (-not $sha -or $sha -ne $localSha) {
+            $bytes = [IO.File]::ReadAllBytes((Join-Path $RepoRoot $file))
+            $blobBody = @{ content = [Convert]::ToBase64String($bytes); encoding = 'base64' }
+            $blob = $null
+            for ($attempt = 1; $attempt -le 5 -and -not $blob; $attempt++) {
+                try {
+                    $blob = Invoke-Api -Method Post -Path "/repos/$Owner/$RepoName/git/blobs" -Body $blobBody
+                } catch {
+                    $message = $_.Exception.Message
+                    Write-Host "== blob '$relative' attempt $attempt failed: $message"
+                    if ($message -match '403') {
+                        Start-Sleep -Seconds 30
+                    } else {
+                        Start-Sleep -Seconds 2
+                    }
+                }
+            }
+            if (-not $blob) { throw "Could not upload $relative" }
+            $sha = $blob.sha
+            $uploaded++
+            Start-Sleep -Milliseconds 150
+        }
+        $treeEntries += @{ path = $relative; mode = '100644'; type = 'blob'; sha = $sha }
     }
+    Write-Host "== Uploaded $uploaded changed file(s) of $($treeEntries.Count)"
 
     $tree = Invoke-Api -Method Post -Path "/repos/$Owner/$RepoName/git/trees" -Body @{ tree = $treeEntries }
     if (-not $tree -or -not $tree.sha) { throw 'Could not create the tree' }
