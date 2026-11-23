@@ -1,4 +1,4 @@
-# SwipeClean · 滑动清理
+﻿# SwipeClean · 滑动清理
 
 一个用原生 SwiftUI + PhotoKit 写的 iOS 相册清理 App：像刷卡片一样浏览相册，上划把内容加入删除备选，每浏览 30 项确认一次，一直刷到相册末尾。
 
@@ -64,7 +64,7 @@ git-credential-manager github login --device
 之后每次一条命令：创建/复用私有仓库 → 推送 → 等待 macOS 编译 → 把 ipa 解压到 `dist/`：
 
 ```powershell
-pwsh -File scripts\publish-and-build.ps1
+powershell -ExecutionPolicy Bypass -File scripts\publish-and-build.ps1
 ```
 
 脚本优先使用 `$env:GH_PAT`（classic PAT，`repo` + `workflow` 权限），没有设置时自动复用 Git Credential Manager 里已存的账号。
@@ -119,3 +119,4 @@ python scripts\verify_ipa.py dist\SwipeClean-1.0.0-unsigned.ipa
 ## License
 
 MIT
+

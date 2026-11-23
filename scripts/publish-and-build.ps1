@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$RepoName = 'swipeclean',
     [string]$Owner = '',
     [switch]$Public
@@ -12,7 +12,7 @@ param(
 #   2. the GitHub account already stored by Git Credential Manager
 #      (git-credential-manager github login --device)
 #
-#   pwsh -File scripts\publish-and-build.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\publish-and-build.ps1
 
 $ErrorActionPreference = 'Stop'
 $ApiBase = 'https://api.github.com'
@@ -167,3 +167,4 @@ $ipa = Get-ChildItem $DistDir -Filter '*.ipa' | Select-Object -First 1
 if (-not $ipa) { throw 'IPA was not unpacked' }
 Write-Host "== IPA: $($ipa.FullName) ($([math]::Round($ipa.Length / 1KB)) KB)"
 Write-Host '== DONE'
+
