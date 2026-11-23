@@ -117,7 +117,11 @@ function Invoke-Api {
         }
 
         $raw = & $Curl @arguments
-        if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE for $Method $Path" }
+        if ($LASTEXITCODE -ne 0) {
+            $detail = ($raw | Out-String).Trim()
+            if ($detail.Length -gt 500) { $detail = $detail.Substring(0, 500) }
+            throw "curl exit $LASTEXITCODE for $Method $Path :: $detail"
+        }
         $text = ($raw | Out-String).Trim()
         if (-not $text) { return $null }
         return ($text | ConvertFrom-Json)
