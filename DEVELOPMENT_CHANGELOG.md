@@ -6,7 +6,7 @@
 - `ios/SwipeClean/Services/ReviewEngine.swift`、`ios/SwipeClean/Views/ReviewScreen.swift`：顶部进度改为当前组进度，前景从左侧填充，并使用弹性曲线随每次操作平滑推进；组满时保持满格直到下一次浏览或确认。
 - `ios/SwipeClean/Views/Components.swift`：照片背景改为 0.85 秒交叉淡化，减轻颜色突变。
 - `ios/SwipeClean/Views/HomeView.swift`、`ios/SwipeClean/Views/ReviewScreen.swift`：移除常驻手势提示；只在首次进入浏览页时显示一次短暂手势引导。收藏成功/取消成功不再弹提示，错误仍保留提醒；移除完成页多余说明。
-- 市场版本/构建号递增至 `1.8.5 (14)`；云构建与 IPA 归档结果待记录。
+- 市场版本/构建号递增至 `1.8.5 (14)`；提交 `43a2770` 的 GitHub Actions run #27 构建成功。`dist/SwipeClean-1.8.5-unsigned.ipa` 已归档至 `dist/` 根目录，验证包含单个 App、arm64 Mach-O 主程序且未签名；`dist/version-backups/` 当前保留 13 个旧包。设备安装测试由用户完成。
 
 ## 2026-11-25 · Codex · v1.8.4（构建号 13）
 
