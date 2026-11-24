@@ -5,8 +5,7 @@ import CoreLocation
 import MapKit
 import UIKit
 
-/// Pull-up info panel, opened from the 详情 control. It slides over the photo
-/// with the reference app's spring instead of presenting a sheet.
+/// Full-screen photo information overlay.
 struct AssetInfoPanel: View {
     let asset: PHAsset
     var onClose: () -> Void
@@ -50,71 +49,77 @@ struct AssetInfoPanel: View {
                 .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    headerArea(topInset: geo.safeAreaInsets.top)
+                    headerArea(topInset: max(geo.safeAreaInsets.top, 52))
 
                     ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(relativeDateText)
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                        Text(dateText)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(Theme.textSecondary)
-                        Rectangle()
-                            .fill(Theme.hairline)
-                            .frame(height: 1)
-                            .padding(.top, 14)
-                    }
-                    .padding(.top, 8)
+                        VStack(alignment: .leading, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(relativeDateText)
+                                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                                Text(dateText)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                            .padding(.top, 12)
 
-                    sectionTitle("照片资讯")
-                    card {
-                        row("类型", typeText)
-                        divider
-                        row("分辨率", "\(asset.pixelWidth) × \(asset.pixelHeight)")
-                        if asset.mediaType == .video {
-                            divider
-                            row("时长", durationText)
-                        }
-                        if !fileName.isEmpty {
-                            divider
-                            row("文件名", fileName)
-                        }
-                        if !fileSizeText.isEmpty {
-                            divider
-                            row("文件大小", fileSizeText)
-                        }
-                    }
+                            dashedDivider
 
-                    if asset.mediaType == .image, !cameraRows.isEmpty {
-                        sectionTitle("拍摄参数")
-                        card {
-                            ForEach(Array(cameraRows.enumerated()), id: \.offset) { index, item in
-                                if index > 0 { divider }
-                                row(item.0, item.1)
+                            sectionTitle("照片资讯", icon: "camera.fill")
+
+                            if !cameraDeviceText.isEmpty {
+                                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                                    Text("设备")
+                                        .foregroundColor(Theme.textSecondary)
+                                    Spacer(minLength: 0)
+                                    Text(cameraDeviceText)
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.trailing)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .font(.system(size: 16, weight: .semibold))
+                            }
+
+                            if !cameraMetrics.isEmpty {
+                                HStack(spacing: 8) {
+                                    ForEach(Array(cameraMetrics.enumerated()), id: \.offset) { _, metric in
+                                        metricTile(value: metric.value, label: metric.label)
+                                    }
+                                }
+                            }
+
+                            if !extraCameraRows.isEmpty {
+                                outlinedRows(extraCameraRows)
+                            }
+
+                            VStack(spacing: 0) {
+                                metadataRow("文件名称", fileName.isEmpty ? "读取中…" : fileName)
+                                divider
+                                metadataRow("解析度", "\(asset.pixelWidth) × \(asset.pixelHeight)")
+                                if asset.mediaType == .video {
+                                    divider
+                                    metadataRow("时长", durationText)
+                                }
+                                if !fileSizeText.isEmpty {
+                                    divider
+                                    metadataRow("文件大小", fileSizeText)
+                                }
+                            }
+
+                            if !pins.isEmpty {
+                                dashedDivider
+                                sectionTitle("拍摄位置", icon: "location.fill")
+                                locationCard
+                            }
+
+                            if isLoading {
+                                ProgressView().tint(.white.opacity(0.6))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
                             }
                         }
-                    }
-
-                    if !pins.isEmpty {
-                        sectionTitle("拍摄位置")
-                        locationCard
-                    }
-
-                    if isLoading {
-                        HStack(spacing: 8) {
-                            ProgressView().tint(.white.opacity(0.6))
-                            Text("正在读取元数据…")
-                                .font(.system(size: 12))
-                                .foregroundColor(Theme.textTertiary)
-                        }
-                        .padding(.top, 2)
-                    }
-                        }
                         .padding(.horizontal, 18)
-                        .padding(.top, 10)
-                        .padding(.bottom, geo.safeAreaInsets.bottom + 28)
+                        .padding(.bottom, max(geo.safeAreaInsets.bottom, 34) + 28)
                     }
                 }
                 .offset(y: max(0, dragOffset))
@@ -142,9 +147,9 @@ struct AssetInfoPanel: View {
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 44, height: 44)
                 }
                 .floatingGlass(Circle())
                 .accessibilityLabel("收起详情")
@@ -153,6 +158,7 @@ struct AssetInfoPanel: View {
             .padding(.top, 6)
             .padding(.bottom, 4)
         }
+        .padding(.top, topInset)
         .contentShape(Rectangle())
         .gesture(
             DragGesture()
@@ -212,7 +218,7 @@ struct AssetInfoPanel: View {
 
             if let coordinateText {
                 divider
-                row("坐标", coordinateText)
+                metadataRow("坐标", coordinateText)
             }
         }
         .padding(.horizontal, 12)
@@ -220,7 +226,7 @@ struct AssetInfoPanel: View {
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.black.opacity(0.28)))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
         )
     }
 
@@ -232,57 +238,110 @@ struct AssetInfoPanel: View {
     }
 
     private var coordinateText: String? {
-        guard let location = asset.location else { return nil }
-        return String(format: "%.4f, %.4f", location.coordinate.latitude, location.coordinate.longitude)
+        guard let coordinate = pins.first?.coordinate else { return nil }
+        return String(format: "%.4f, %.4f", coordinate.latitude, coordinate.longitude)
     }
 
     // MARK: - Cards
 
-    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(spacing: 0) {
-            content()
-        }
-        .padding(.horizontal, 16)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.black.opacity(0.28)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 1)
-        )
-    }
-
     private var divider: some View {
         Rectangle()
-            .fill(Theme.hairline)
+            .fill(Color.white.opacity(0.16))
             .frame(height: 1)
     }
 
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(Theme.textSecondary)
-            .padding(.leading, 2)
-            .padding(.top, 2)
+    private var dashedDivider: some View {
+        GeometryReader { geometry in
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: geometry.size.height / 2))
+                path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height / 2))
+            }
+            .stroke(Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [1, 3]))
+        }
+        .frame(height: 1)
     }
 
-    private func row(_ title: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: 16) {
+    private func sectionTitle(_ text: String, icon: String) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+            Text(text)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+        }
+        .foregroundColor(Theme.textSecondary)
+        .padding(.top, 2)
+    }
+
+    private func metadataRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(Theme.textTertiary)
+                .frame(width: 4, height: 4)
+                .padding(.top, 8)
             Text(title)
-                .font(.system(size: 13))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
             Text(value)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
         .padding(.vertical, 11)
     }
 
+    private func metricTile(value: String, label: String) -> some View {
+        VStack(spacing: 5) {
+            Text(value)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 54)
+        .padding(.vertical, 4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+        )
+    }
+
+    private func outlinedRows(_ rows: [(String, String)]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, item in
+                if index > 0 { divider }
+                HStack(alignment: .top, spacing: 12) {
+                    Text(item.0)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Theme.textSecondary)
+                    Spacer(minLength: 8)
+                    Text(item.1)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.trailing)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+                .padding(.vertical, 10)
+            }
+        }
+        .padding(.horizontal, 14)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.black.opacity(0.24)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+        )
+    }
+
     // MARK: - Formatting
 
     private var dateText: String {
-        guard let date = asset.creationDate else { return "未知" }
+        guard let date = photoDate else { return "未知" }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy年M月d日 EEEE HH:mm"
@@ -290,7 +349,7 @@ struct AssetInfoPanel: View {
     }
 
     private var relativeDateText: String {
-        guard let date = asset.creationDate else { return "照片" }
+        guard let date = photoDate else { return "照片" }
         let components = Calendar.current.dateComponents([.year, .month, .day], from: date, to: Date())
         if let years = components.year, years >= 1 { return "\(years) 年前" }
         if let months = components.month, months >= 1 { return "\(months) 个月前" }
@@ -298,8 +357,14 @@ struct AssetInfoPanel: View {
         return "今天"
     }
 
-    private var typeText: String {
-        asset.mediaType == .video ? "视频" : "照片"
+    private var photoDate: Date? {
+        if let date = asset.creationDate { return date }
+        let value = stringValue(exif[kCGImagePropertyExifDateTimeOriginal as String])
+        guard !value.isEmpty else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        return formatter.date(from: value)
     }
 
     private var durationText: String {
@@ -307,41 +372,204 @@ struct AssetInfoPanel: View {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    private var cameraRows: [(String, String)] {
-        guard !properties.isEmpty else { return [] }
-        let exif = (properties[kCGImagePropertyExifDictionary as String] as? [String: Any]) ?? [:]
-        let tiff = (properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any]) ?? [:]
+    private var exif: [String: Any] {
+        properties[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
+    }
+
+    private var exifAux: [String: Any] {
+        properties[kCGImagePropertyExifAuxDictionary as String] as? [String: Any] ?? [:]
+    }
+
+    private var tiff: [String: Any] {
+        properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+    }
+
+    private var cameraDeviceText: String {
+        let make = stringValue(tiff[kCGImagePropertyTIFFMake as String])
+        let model = stringValue(tiff[kCGImagePropertyTIFFModel as String])
+        if make.isEmpty { return model }
+        if model.isEmpty { return make }
+        if model.lowercased().hasPrefix(make.lowercased()) { return model }
+        return "\(make) \(model)"
+    }
+
+    private var cameraMetrics: [(label: String, value: String)] {
+        var metrics: [(label: String, value: String)] = []
+        if let fNumber = numberValue(exif[kCGImagePropertyExifFNumber as String]), fNumber > 0 {
+            metrics.append((label: "光圈", value: String(format: "f/%.1f", fNumber)))
+        }
+        if let exposure = numberValue(exif[kCGImagePropertyExifExposureTime as String]), exposure > 0 {
+            let shutter = exposure < 1
+                ? "1/\(Int((1 / exposure).rounded())) s"
+                : String(format: "%.2g s", exposure)
+            metrics.append((label: "快门", value: shutter))
+        }
+        if let iso = firstNumber(exif[kCGImagePropertyExifISOSpeedRatings as String]) {
+            metrics.append((label: "感光度", value: "ISO \(Int(iso.rounded()))"))
+        }
+        if let focal = numberValue(exif[kCGImagePropertyExifFocalLength as String]), focal > 0 {
+            metrics.append((label: "焦距", value: String(format: "%.0f mm", focal)))
+        }
+        return metrics
+    }
+
+    private var extraCameraRows: [(String, String)] {
         var rows: [(String, String)] = []
-
-        let make = tiff[kCGImagePropertyTIFFMake as String] as? String
-        let model = tiff[kCGImagePropertyTIFFModel as String] as? String
-        if let model {
-            let device: String
-            if let make, !model.hasPrefix(make) {
-                device = "\(make) \(model)"
-            } else {
-                device = model
+        let lensMake = stringValue(exif[kCGImagePropertyExifLensMake as String])
+        let lensModel = stringValue(exif[kCGImagePropertyExifLensModel as String])
+        let auxiliaryLensModel = stringValue(exifAux[kCGImagePropertyExifAuxLensModel as String])
+        let lens = [lensMake, lensModel]
+            .filter { !$0.isEmpty }
+            .reduce(into: [String]()) { values, value in
+                if !values.contains(where: { $0.localizedCaseInsensitiveCompare(value) == .orderedSame }) {
+                    values.append(value)
+                }
             }
-            rows.append(("设备", device))
-        }
+            .joined(separator: " ")
+        append("镜头", lens.isEmpty ? auxiliaryLensModel : lens, to: &rows)
 
-        if let fNumber = exif[kCGImagePropertyExifFNumber as String] as? Double {
-            rows.append(("光圈", String(format: "f/%.1f", fNumber)))
+        if let equivalent = numberValue(exif[kCGImagePropertyExifFocalLenIn35mmFilm as String]), equivalent > 0 {
+            rows.append(("等效焦距", "\(Int(equivalent.rounded())) mm"))
         }
-        if let exposure = exif[kCGImagePropertyExifExposureTime as String] as? Double, exposure > 0 {
-            if exposure < 1 {
-                rows.append(("快门", "1/\(Int((1 / exposure).rounded())) s"))
-            } else {
-                rows.append(("快门", String(format: "%.1f s", exposure)))
-            }
+        if let bias = numberValue(exif[kCGImagePropertyExifExposureBiasValue as String]) {
+            rows.append(("曝光补偿", String(format: "%+.1f EV", bias)))
         }
-        if let isoValues = exif[kCGImagePropertyExifISOSpeedRatings as String] as? [Int], let iso = isoValues.first {
-            rows.append(("ISO", "\(iso)"))
+        if let program = numberValue(exif[kCGImagePropertyExifExposureProgram as String]) {
+            rows.append(("曝光程序", exposureProgram(Int(program))))
         }
-        if let focal = exif[kCGImagePropertyExifFocalLength as String] as? Double {
-            rows.append(("焦距", String(format: "%.0f mm", focal)))
+        if let mode = numberValue(exif[kCGImagePropertyExifExposureMode as String]) {
+            rows.append(("曝光模式", exposureMode(Int(mode))))
         }
+        if let mode = numberValue(exif[kCGImagePropertyExifMeteringMode as String]) {
+            rows.append(("测光模式", meteringMode(Int(mode))))
+        }
+        if let flash = numberValue(exif[kCGImagePropertyExifFlash as String]) {
+            rows.append(("闪光灯", (Int(flash) & 1) == 1 ? "已闪光" : "未闪光"))
+        }
+        if let whiteBalance = numberValue(exif[kCGImagePropertyExifWhiteBalance as String]) {
+            rows.append(("白平衡", Int(whiteBalance) == 0 ? "自动" : "手动"))
+        }
+        if let lightSource = numberValue(exif[kCGImagePropertyExifLightSource as String]) {
+            rows.append(("光源", lightSourceName(Int(lightSource))))
+        }
+        if let scene = numberValue(exif[kCGImagePropertyExifSceneCaptureType as String]) {
+            rows.append(("场景", sceneName(Int(scene))))
+        }
+        if let zoom = numberValue(exif[kCGImagePropertyExifDigitalZoomRatio as String]), zoom > 0, zoom != 1 {
+            rows.append(("数码变焦", String(format: "%.1f×", zoom)))
+        }
+        append("拍摄软件", stringValue(tiff[kCGImagePropertyTIFFSoftware as String]), to: &rows)
+        append("作者", stringValue(tiff[kCGImagePropertyTIFFArtist as String]), to: &rows)
+        append("版权", stringValue(tiff[kCGImagePropertyTIFFCopyright as String]), to: &rows)
+
+        if let colorSpace = numberValue(exif[kCGImagePropertyExifColorSpace as String]) {
+            rows.append(("色彩空间", Int(colorSpace) == 1 ? "sRGB" : "未校准色彩空间"))
+        }
+        if let brightness = numberValue(exif[kCGImagePropertyExifBrightnessValue as String]) {
+            rows.append(("亮度", String(format: "%.1f EV", brightness)))
+        }
+        if let contrast = numberValue(exif[kCGImagePropertyExifContrast as String]) {
+            rows.append(("对比度", renderingValue(Int(contrast))))
+        }
+        if let saturation = numberValue(exif[kCGImagePropertyExifSaturation as String]) {
+            rows.append(("饱和度", renderingValue(Int(saturation))))
+        }
+        if let sharpness = numberValue(exif[kCGImagePropertyExifSharpness as String]) {
+            rows.append(("锐度", renderingValue(Int(sharpness))))
+        }
+        append("相机持有人", stringValue(exif[kCGImagePropertyExifCameraOwnerName as String]), to: &rows)
         return rows
+    }
+
+    private func append(_ title: String, _ value: String, to rows: inout [(String, String)]) {
+        guard !value.isEmpty else { return }
+        rows.append((title, value))
+    }
+
+    private func stringValue(_ value: Any?) -> String {
+        (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private func numberValue(_ value: Any?) -> Double? {
+        if let number = value as? NSNumber { return number.doubleValue }
+        if let number = value as? Double { return number }
+        if let number = value as? Int { return Double(number) }
+        return nil
+    }
+
+    private func firstNumber(_ value: Any?) -> Double? {
+        if let values = value as? [NSNumber] { return values.first?.doubleValue }
+        if let values = value as? [Int] { return values.first.map { Double($0) } }
+        return numberValue(value)
+    }
+
+    private func exposureProgram(_ value: Int) -> String {
+        switch value {
+        case 1: return "手动"
+        case 2: return "程序自动"
+        case 3: return "光圈优先"
+        case 4: return "快门优先"
+        case 5: return "创意"
+        case 6: return "运动"
+        case 7: return "人像"
+        case 8: return "风景"
+        default: return "其他"
+        }
+    }
+
+    private func exposureMode(_ value: Int) -> String {
+        switch value {
+        case 0: return "自动曝光"
+        case 1: return "手动曝光"
+        case 2: return "自动包围曝光"
+        default: return "其他"
+        }
+    }
+
+    private func lightSourceName(_ value: Int) -> String {
+        switch value {
+        case 1: return "日光"
+        case 2: return "荧光灯"
+        case 3: return "白炽灯"
+        case 4: return "闪光灯"
+        case 9: return "晴天"
+        case 10: return "阴天"
+        case 11: return "阴影"
+        case 0: return "未知"
+        default: return "其他光源"
+        }
+    }
+
+    private func sceneName(_ value: Int) -> String {
+        switch value {
+        case 0: return "标准"
+        case 1: return "风景"
+        case 2: return "人像"
+        case 3: return "夜景"
+        default: return "其他"
+        }
+    }
+
+    private func renderingValue(_ value: Int) -> String {
+        switch value {
+        case 0: return "标准"
+        case 1: return "柔和"
+        case 2: return "强烈"
+        default: return "其他"
+        }
+    }
+
+    private func meteringMode(_ value: Int) -> String {
+        switch value {
+        case 1: return "平均测光"
+        case 2: return "中央重点"
+        case 3: return "点测光"
+        case 4: return "多点测光"
+        case 5: return "矩阵测光"
+        case 6: return "局部测光"
+        case 0: return "未指定"
+        default: return "其他"
+        }
     }
 
     // MARK: - Loading
@@ -377,16 +605,38 @@ struct AssetInfoPanel: View {
                       let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else { return }
                 properties = props
                 elevationText = elevation(from: props)
+                if pins.isEmpty, let coordinate = coordinate(from: props) {
+                    let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                    region = MKCoordinateRegion(
+                        center: coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                    )
+                    pins = [MapPoint(coordinate: coordinate)]
+                    reverseGeocode(location)
+                }
             }
         }
     }
 
+    private func coordinate(from props: [String: Any]) -> CLLocationCoordinate2D? {
+        guard let gps = props[kCGImagePropertyGPSDictionary as String] as? [String: Any],
+              let latitude = numberValue(gps[kCGImagePropertyGPSLatitude as String]),
+              let longitude = numberValue(gps[kCGImagePropertyGPSLongitude as String]) else {
+            return nil
+        }
+        let latitudeRef = stringValue(gps[kCGImagePropertyGPSLatitudeRef as String]).uppercased()
+        let longitudeRef = stringValue(gps[kCGImagePropertyGPSLongitudeRef as String]).uppercased()
+        let signedLatitude = latitudeRef == "S" ? -abs(latitude) : abs(latitude)
+        let signedLongitude = longitudeRef == "W" ? -abs(longitude) : abs(longitude)
+        return CLLocationCoordinate2D(latitude: signedLatitude, longitude: signedLongitude)
+    }
+
     private func elevation(from props: [String: Any]) -> String {
         guard let gps = props[kCGImagePropertyGPSDictionary as String] as? [String: Any],
-              let altitude = gps[kCGImagePropertyGPSAltitude as String] as? Double else {
+              let altitude = numberValue(gps[kCGImagePropertyGPSAltitude as String]) else {
             return ""
         }
-        let ref = gps[kCGImagePropertyGPSAltitudeRef as String] as? Int ?? 0
+        let ref = Int(numberValue(gps[kCGImagePropertyGPSAltitudeRef as String]) ?? 0)
         let meters = ref == 1 ? -altitude : altitude
         return "海拔 \(Int(meters.rounded())) m"
     }

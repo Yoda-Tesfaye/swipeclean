@@ -85,7 +85,7 @@ struct SettingsSheet: View {
                         .font(.system(size: 12))
                         .foregroundColor(Theme.textSecondary)
                     Spacer()
-                    Text("1.8.5")
+                    Text("1.8.6")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white)
                 }
