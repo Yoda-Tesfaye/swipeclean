@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 import Combine
 
-enum HomeTab: String, CaseIterable, Identifiable {
+enum HomeTab: String, CaseIterable, Identifiable, Hashable {
     case photos
     case videos
     case settings

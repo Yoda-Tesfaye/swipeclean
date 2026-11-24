@@ -4,18 +4,42 @@ import Photos
 struct HomeView: View {
     @ObservedObject var app: AppModel
 
+    @ViewBuilder
     var body: some View {
-        ZStack(alignment: .bottom) {
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if #available(iOS 26.0, *) {
+            TabView(selection: $app.tab) {
+                tab(.photos)
+                tab(.videos)
+                tab(.settings)
+            }
+            .tint(Theme.accent)
+        } else {
+            ZStack(alignment: .bottom) {
+                selectedContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            TabBar(selection: $app.tab)
+                TabBar(selection: $app.tab)
+            }
         }
     }
 
+    @available(iOS 26.0, *)
+    private func tab(_ tab: HomeTab) -> some View {
+        selectedContent(for: tab)
+            .tabItem {
+                Label(tab.title, systemImage: tab.symbol)
+            }
+            .tag(tab)
+    }
+
     @ViewBuilder
-    private var content: some View {
-        switch app.tab {
+    private var selectedContent: some View {
+        selectedContent(for: app.tab)
+    }
+
+    @ViewBuilder
+    private func selectedContent(for tab: HomeTab) -> some View {
+        switch tab {
         case .photos:
             DeckHome(engine: app.photos, settings: app.settings, onReset: { app.resetHistory() })
         case .videos:
@@ -42,35 +66,7 @@ struct TabBar: View {
             let index = CGFloat(HomeTab.allCases.firstIndex(of: selection) ?? 0)
             let baseX = inset + index * itemWidth
 
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .floatingGlassPanel(Capsule())
-
-                Capsule()
-                    .frame(width: itemWidth - 2, height: barHeight - 8)
-                    .floatingGlass(Capsule())
-                    .offset(x: baseX + dragTranslation + 1, y: 4)
-
-                HStack(spacing: 0) {
-                    ForEach(HomeTab.allCases) { tab in
-                        Button {
-                            select(tab)
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: tab.symbol)
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text(tab.title)
-                                    .font(.system(size: 10, weight: .semibold))
-                            }
-                            .foregroundColor(selection == tab ? .white : Theme.textSecondary)
-                            .frame(width: itemWidth, height: barHeight)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, inset)
-            }
+            barContents(itemWidth: itemWidth, baseX: baseX, width: geo.size.width)
             .frame(width: geo.size.width, height: barHeight)
             .contentShape(Capsule())
             .simultaneousGesture(dragGesture(itemWidth: itemWidth, baseX: baseX, count: count))
@@ -78,6 +74,40 @@ struct TabBar: View {
         .frame(height: barHeight)
         .padding(.horizontal, 46)
         .padding(.bottom, 8)
+    }
+
+    private func barContents(itemWidth: CGFloat, baseX: CGFloat, width: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .frame(width: width, height: barHeight)
+                .floatingGlassPanel(Capsule())
+
+            Capsule()
+                .frame(width: itemWidth, height: barHeight)
+                .floatingGlass(Capsule())
+                .offset(x: baseX + dragTranslation)
+
+            HStack(spacing: 0) {
+                ForEach(HomeTab.allCases) { tab in
+                    Button {
+                        select(tab)
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: tab.symbol)
+                                .font(.system(size: 16, weight: .semibold))
+                            Text(tab.title)
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundColor(selection == tab ? .white : Theme.textSecondary)
+                        .frame(width: itemWidth, height: barHeight)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selection == tab ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, inset)
+        }
     }
 
     private func select(_ tab: HomeTab) {
