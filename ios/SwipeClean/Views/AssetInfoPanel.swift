@@ -207,7 +207,7 @@ struct AssetInfoPanel: View {
                     .multilineTextAlignment(.trailing)
             }
             .padding(.horizontal, 2)
-            .padding(.top, topInset + 10)
+            .padding(.top, 10)
             .padding(.bottom, 12)
 
             if let coordinateText {

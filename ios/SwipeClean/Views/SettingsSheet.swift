@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct SettingsSheet: View {
     @ObservedObject var app: AppModel
@@ -85,7 +85,7 @@ struct SettingsSheet: View {
                         .font(.system(size: 12))
                         .foregroundColor(Theme.textSecondary)
                     Spacer()
-                    Text("1.8.3")
+                    Text("1.8.4")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white)
                 }
