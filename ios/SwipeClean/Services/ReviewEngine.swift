@@ -60,7 +60,11 @@ final class ReviewEngine: ObservableObject {
     }
 
     var remaining: Int {
-        max(items.count - index, 0)
+        guard index < items.count else { return 0 }
+        let selected = Set(bin.map(\.localIdentifier))
+        return items[index...].reduce(into: 0) { count, asset in
+            if !selected.contains(asset.localIdentifier) { count += 1 }
+        }
     }
 
     var progress: Double {
@@ -134,20 +138,14 @@ final class ReviewEngine: ObservableObject {
         stack.append((index: index, binned: false))
         reviewedCount += 1
         reviewedInBatch += 1
-        index += 1
+        index = nextAvailableIndex(after: index) ?? items.count
         refreshHistoryCount()
         prefetchNeighbours()
         evaluatePosition()
     }
 
     func moveBackward() {
-        guard index > 0 else { return }
-        let selectedIDs = Set(bin.map(\.localIdentifier))
-        var target = index - 1
-        while target > 0, selectedIDs.contains(items[target].localIdentifier) {
-            target -= 1
-        }
-        guard !selectedIDs.contains(items[target].localIdentifier) else { return }
+        guard let target = previousAvailableIndex(before: index) else { return }
         index = target
         if let stackIndex = stack.lastIndex(where: { $0.index == target }), !stack[stackIndex].binned {
             stack.remove(at: stackIndex)
@@ -169,7 +167,7 @@ final class ReviewEngine: ObservableObject {
         stack.append((index: index, binned: true))
         reviewedCount += 1
         reviewedInBatch += 1
-        index += 1
+        index = nextAvailableIndex(after: index - 1) ?? items.count
         canUndo = true
         refreshHistoryCount()
         prefetchNeighbours()
@@ -193,6 +191,24 @@ final class ReviewEngine: ObservableObject {
         refreshHistoryCount()
         prefetchNeighbours()
         showToast("已撤销")
+    }
+
+    func previousAvailableIndex(before position: Int) -> Int? {
+        guard position > 0 else { return nil }
+        let selected = Set(bin.map(\.localIdentifier))
+        for candidate in stride(from: min(position - 1, items.count - 1), through: 0, by: -1) {
+            if !selected.contains(items[candidate].localIdentifier) { return candidate }
+        }
+        return nil
+    }
+
+    func nextAvailableIndex(after position: Int) -> Int? {
+        guard position + 1 < items.count else { return nil }
+        let selected = Set(bin.map(\.localIdentifier))
+        for candidate in (position + 1)..<items.count {
+            if !selected.contains(items[candidate].localIdentifier) { return candidate }
+        }
+        return nil
     }
 
     func removeBin(_ asset: PHAsset) {

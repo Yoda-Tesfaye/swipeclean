@@ -24,6 +24,7 @@ struct AssetInfoPanel: View {
     )
     @State private var isLoading = true
     @State private var dragOffset: CGFloat = 0
+    @State private var backgroundImage: UIImage?
 
     private struct MapPoint: Identifiable {
         let id = UUID()
@@ -31,11 +32,28 @@ struct AssetInfoPanel: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerArea
+        GeometryReader { geo in
+            ZStack {
+                Group {
+                    if let backgroundImage {
+                        Image(uiImage: backgroundImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
+                            .blur(radius: 24)
+                            .overlay(Color.black.opacity(0.55))
+                    } else {
+                        Theme.background
+                    }
+                }
+                .ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(spacing: 0) {
+                    headerArea(topInset: geo.safeAreaInsets.top)
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(relativeDateText)
                             .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -93,39 +111,24 @@ struct AssetInfoPanel: View {
                         }
                         .padding(.top, 2)
                     }
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
+                        .padding(.bottom, geo.safeAreaInsets.bottom + 28)
+                    }
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 10)
-                .padding(.bottom, 28)
+                .offset(y: max(0, dragOffset))
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(.regularMaterial)
-        )
-        .background(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color.black.opacity(0.38))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.35), Color.white.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 14)
-        .offset(y: max(0, dragOffset))
-        .onAppear(perform: load)
+        .onAppear {
+            load()
+            loadBackground()
+        }
     }
 
-    /// Only the handle and title row drag; the body scrolls normally.
-    private var headerArea: some View {
+    /// The header and content remain over the full-screen blurred photo.
+    private func headerArea(topInset: CGFloat) -> some View {
         VStack(spacing: 0) {
             Capsule()
                 .fill(Color.white.opacity(0.22))
@@ -204,7 +207,7 @@ struct AssetInfoPanel: View {
                     .multilineTextAlignment(.trailing)
             }
             .padding(.horizontal, 2)
-            .padding(.top, 10)
+            .padding(.top, topInset + 10)
             .padding(.bottom, 12)
 
             if let coordinateText {
@@ -219,6 +222,13 @@ struct AssetInfoPanel: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)
         )
+    }
+
+    private func loadBackground() {
+        let target = ImageStore.target(for: UIScreen.main.bounds.size)
+        ImageStore.shared.load(for: asset, target: target) { image in
+            backgroundImage = image
+        }
     }
 
     private var coordinateText: String? {

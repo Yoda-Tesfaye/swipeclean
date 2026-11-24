@@ -23,6 +23,7 @@ struct CardPager: View {
 
     private struct Page: Identifiable {
         let index: Int
+        let position: Int
         let asset: PHAsset
         var id: String { asset.localIdentifier }
     }
@@ -54,18 +55,22 @@ struct CardPager: View {
 
     private var pages: [Page] {
         guard !engine.items.isEmpty else { return [] }
-        let lower = max(engine.index - 1, 0)
-        let upper = min(engine.items.count - 1, engine.index + 1)
-        guard lower <= upper else { return [] }
-        let selectedIDs = Set(engine.bin.map(\.localIdentifier))
-        return (lower...upper).map { index in
-            Page(index: index, asset: engine.items[index])
-        }.filter { $0.index == engine.index || !selectedIDs.contains($0.asset.localIdentifier) }
+        var result: [Page] = []
+        if let previous = engine.previousAvailableIndex(before: engine.index) {
+            result.append(Page(index: previous, position: -1, asset: engine.items[previous]))
+        }
+        if let current = engine.current {
+            result.append(Page(index: engine.index, position: 0, asset: current))
+        }
+        if let next = engine.nextAvailableIndex(after: engine.index) {
+            result.append(Page(index: next, position: 1, asset: engine.items[next]))
+        }
+        return result
     }
 
     private func cardView(page: Page, size: CGSize, target: CGSize) -> some View {
         let isCurrent = page.index == engine.index
-        let offsetX = CGFloat(page.index - engine.index) * size.width + drag.width
+        let offsetX = CGFloat(page.position) * size.width + drag.width
         let cardSize = Self.fittedSize(for: page.asset,
                                        in: CGSize(width: max(size.width - 28, 1), height: size.height))
 

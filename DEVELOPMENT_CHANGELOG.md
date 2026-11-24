@@ -4,7 +4,7 @@
 
 ### IPA 归档约定
 
-- 每次项目修改都递增市场版本和构建号，生成新的未签名 IPA；用户自行完成设备安装测试。
+- 每次应用代码修改都递增市场版本和构建号，生成新的未签名 IPA；用户自行完成设备安装测试。
 - 最新 IPA 保存在 `dist/` 根目录。新版本成功生成后，将旧版本移入 `dist/version-backups/`；该目录只保留最新版本之前的 20 个 IPA（历史不足 20 个时全部保留）。
 
 ## 2026-11-25 · Codex · v1.8.2（构建号 11）
@@ -23,9 +23,16 @@
 ### 验证状态
 
 - 已运行 `git diff --check`，通过。
-- 按用户要求，本条尚未构建或安装；设备安装验证由用户执行。
-- 当前改动未提交、未推送；生成新 IPA 前需先确认本条代码已纳入构建。
-- 本次根据用户要求整理 `dist/`：11 个已有 IPA 全部保留在 `dist/version-backups/`，包括重复版本名的旧 1.8.0 构建；清除了原有 IPA 子目录。新生成的 1.8.2 IPA 将放在 `dist/` 根目录。
+- 提交 `089ab42` 已推送；GitHub Actions run #23 构建成功。
+- 新包 `dist/SwipeClean-1.8.2-unsigned.ipa`：未签名 arm64 IPA，用户负责安装测试。
+- 本次根据用户要求整理 `dist/`：11 个旧 IPA 全部保存在 `dist/version-backups/`（含重复版本名的旧 1.8.0 包）；清除原有子目录。最新的 1.8.2 包位于 `dist/` 根目录。
+
+## 2026-11-25 · Codex · v1.8.3（构建号 12）
+
+- `ios/SwipeClean/Views/ReviewScreen.swift`：将顶部模式胶囊替换为浏览进度条；底部收藏、详情、撤回控件缩至 44 pt 高度。详情不再作为独立圆角面板呈现，改为全屏照片模糊背景覆盖。
+- `ios/SwipeClean/Views/AssetInfoPanel.swift`：使用当前照片的高分辨率图像铺满背景并模糊，元数据内容浮在其上。
+- `ios/SwipeClean/Services/ReviewEngine.swift`、`ios/SwipeClean/Views/CardPager.swift`：翻页目标和左右邻卡都按删除备选过滤，并以相邻可浏览照片计算动画位置，避免短暂闪过、卡顿或向前翻页再次出现。
+- 市场版本/构建号已升至 `1.8.3 (12)`；构建与 IPA 归档结果待记录。
 
 ## 2026-11-25 · Codex · `60b7e91`
 

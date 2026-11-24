@@ -78,8 +78,14 @@ struct ReviewScreen: View {
     // MARK: - Viewer
 
     private var viewer: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .top) {
+        ZStack(alignment: .top) {
+            if showInfo, let asset = engine.current {
+                AssetInfoPanel(asset: asset) {
+                    closeInfo()
+                }
+                .transition(.opacity)
+                .zIndex(2)
+            } else {
                 CardPager(engine: engine, chromeVisible: $chromeVisible)
                     .overlay(alignment: .top) {
                         if engine.reviewedCount == 0 {
@@ -89,20 +95,10 @@ struct ReviewScreen: View {
                     }
 
                 header
-
-                if showInfo, let asset = engine.current {
-                    AssetInfoPanel(asset: asset) {
-                        closeInfo()
-                    }
-                    .frame(height: min(geo.size.height * 0.82, 800))
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 76)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(2)
-                }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !showInfo {
                 bottomControls
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
@@ -128,12 +124,23 @@ struct ReviewScreen: View {
 
             Spacer(minLength: 0)
 
-            Text(engine.mode.title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .floatingGlass(Capsule())
+            GeometryReader { _ in
+                let width: CGFloat = 124
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.28))
+                        .frame(width: width, height: 5)
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: max(0, width * engine.progress), height: 5)
+                }
+                .frame(width: width, height: 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(width: 124, height: 44)
+            .accessibilityElement()
+            .accessibilityLabel("浏览进度")
+            .accessibilityValue("\(Int(engine.progress * 100))%")
 
             Spacer(minLength: 0)
 
@@ -194,7 +201,7 @@ struct ReviewScreen: View {
                             .foregroundColor(showInfo ? Theme.accent : .white)
                     }
                     .padding(.horizontal, 18)
-                    .frame(maxWidth: 230, minHeight: 58)
+                    .frame(maxWidth: 230, minHeight: 44, maxHeight: 44)
                     .contentShape(Capsule())
                     .floatingGlass(Capsule())
                 }
@@ -229,7 +236,7 @@ struct ReviewScreen: View {
             Image(systemName: icon)
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundColor(tint)
-                .frame(width: 58, height: 58)
+                .frame(width: 44, height: 44)
                 .floatingGlass(Circle())
         }
         .buttonStyle(PressableStyle())
