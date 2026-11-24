@@ -23,19 +23,26 @@ struct BatchSheet: View {
 
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(engine.bin, id: \.localIdentifier) { asset in
+                    ForEach(engine.batchCandidates, id: \.localIdentifier) { asset in
+                        let selected = engine.bin.contains { $0.localIdentifier == asset.localIdentifier }
                         AssetThumb(asset: asset)
+                            .overlay {
+                                if !selected {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(Color.black.opacity(0.38))
+                                }
+                            }
                             .overlay(alignment: .bottomTrailing) {
-                                Image(systemName: "checkmark")
+                                Image(systemName: selected ? "checkmark" : "plus")
                                     .font(.system(size: 11, weight: .heavy))
                                     .foregroundColor(.white)
                                     .frame(width: 24, height: 24)
-                                    .background(Circle().fill(Theme.success))
+                                    .background(Circle().fill(selected ? Theme.success : Color.black.opacity(0.55)))
                                     .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1.5))
                                     .padding(7)
                             }
                             .onTapGesture {
-                                engine.removeBin(asset)
+                                engine.toggleBatchSelection(asset)
                             }
                     }
                 }
@@ -43,7 +50,7 @@ struct BatchSheet: View {
                 .padding(.bottom, 20)
                 .animation(.easeOut(duration: 0.16), value: engine.bin.count)
 
-                if engine.bin.isEmpty {
+                if engine.batchCandidates.isEmpty {
                     Text("备选已清空，这些内容会被保留")
                         .font(.system(size: 13))
                         .foregroundColor(Theme.textSecondary)

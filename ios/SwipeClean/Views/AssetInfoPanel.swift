@@ -36,9 +36,22 @@ struct AssetInfoPanel: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(relativeDateText)
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text(dateText)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Theme.textSecondary)
+                        Rectangle()
+                            .fill(Theme.hairline)
+                            .frame(height: 1)
+                            .padding(.top, 14)
+                    }
+                    .padding(.top, 8)
+
+                    sectionTitle("照片资讯")
                     card {
-                        row("拍摄时间", dateText)
-                        divider
                         row("类型", typeText)
                         divider
                         row("分辨率", "\(asset.pixelWidth) × \(asset.pixelHeight)")
@@ -264,6 +277,15 @@ struct AssetInfoPanel: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy年M月d日 EEEE HH:mm"
         return formatter.string(from: date)
+    }
+
+    private var relativeDateText: String {
+        guard let date = asset.creationDate else { return "照片" }
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date, to: Date())
+        if let years = components.year, years >= 1 { return "\(years) 年前" }
+        if let months = components.month, months >= 1 { return "\(months) 个月前" }
+        if let days = components.day, days >= 1 { return "\(days) 天前" }
+        return "今天"
     }
 
     private var typeText: String {

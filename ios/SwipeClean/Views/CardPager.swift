@@ -57,15 +57,17 @@ struct CardPager: View {
         let lower = max(engine.index - 1, 0)
         let upper = min(engine.items.count - 1, engine.index + 1)
         guard lower <= upper else { return [] }
+        let selectedIDs = Set(engine.bin.map(\.localIdentifier))
         return (lower...upper).map { index in
             Page(index: index, asset: engine.items[index])
-        }
+        }.filter { $0.index == engine.index || !selectedIDs.contains($0.asset.localIdentifier) }
     }
 
     private func cardView(page: Page, size: CGSize, target: CGSize) -> some View {
         let isCurrent = page.index == engine.index
         let offsetX = CGFloat(page.index - engine.index) * size.width + drag.width
-        let cardSize = Self.fittedSize(for: page.asset, in: size)
+        let cardSize = Self.fittedSize(for: page.asset,
+                                       in: CGSize(width: max(size.width - 28, 1), height: size.height))
 
         var verdict: CardVerdict = .none
         if isCurrent {

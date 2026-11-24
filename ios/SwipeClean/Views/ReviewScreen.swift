@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import CoreLocation
 
 /// Full-screen review deck. Follows the reference app's immersion: the photo
 /// runs under floating Liquid Glass chrome, the header sits on top, and the
@@ -13,6 +14,7 @@ struct ReviewScreen: View {
     @State private var showBin = false
     @State private var showInfo = false
     @State private var isFavorite = false
+    @State private var placeTitle = ""
 
     private var motion: Animation? {
         AppMotion.spring(reduceMotion: reduceMotion)
@@ -58,9 +60,13 @@ struct ReviewScreen: View {
         }) { _ in
             BatchSheet(engine: engine)
         }
-        .onAppear(perform: syncFavorite)
+        .onAppear {
+            syncFavorite()
+            loadPlaceTitle()
+        }
         .onChange(of: engine.index) { _ in
             syncFavorite()
+            loadPlaceTitle()
             if showInfo {
                 withAnimation(motion) {
                     showInfo = false
@@ -88,10 +94,10 @@ struct ReviewScreen: View {
                     AssetInfoPanel(asset: asset) {
                         closeInfo()
                     }
-                    .frame(height: min(geo.size.height * 0.56, 560))
+                    .frame(height: min(geo.size.height * 0.82, 800))
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.horizontal, 10)
-                    .padding(.bottom, 92)
+                    .padding(.bottom, 76)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
@@ -122,16 +128,11 @@ struct ReviewScreen: View {
 
             Spacer(minLength: 0)
 
-            VStack(spacing: 1) {
-                Text(relativeDateText)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                Text(engine.mode.title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.65))
-            }
+            Text(engine.mode.title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
             .padding(.horizontal, 18)
-            .padding(.vertical, 6)
+            .padding(.vertical, 10)
             .floatingGlass(Capsule())
 
             Spacer(minLength: 0)
@@ -166,31 +167,49 @@ struct ReviewScreen: View {
     // MARK: - Bottom controls
 
     private var bottomControls: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 2) {
-                controlButton(isFavorite ? "heart.fill" : "heart",
-                              tint: isFavorite ? Theme.danger : .white,
-                              enabled: true,
-                              label: isFavorite ? "取消收藏" : "收藏") {
-                    toggleFavorite()
-                }
+        VStack(spacing: 10) {
+            HStack(spacing: 0) {
+                roundControlButton(isFavorite ? "heart.fill" : "heart",
+                                   tint: isFavorite ? Theme.danger : .white,
+                                   label: isFavorite ? "取消收藏" : "收藏",
+                                   action: toggleFavorite)
 
-                controlButton("info.circle",
-                              tint: showInfo ? Theme.accent : .white,
-                              enabled: true,
-                              label: "详情") {
-                    toggleInfo()
-                }
+                Spacer(minLength: 18)
 
-                controlButton("arrow.uturn.backward",
-                              tint: engine.bin.isEmpty ? Theme.textTertiary : .white,
-                              enabled: !engine.bin.isEmpty,
-                              label: "撤回上一步") {
-                    engine.undoLastAction()
+                Button(action: toggleInfo) {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(relativeDateText)
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                            if engine.current?.location != nil, !placeTitle.isEmpty {
+                                Text(placeTitle)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Theme.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundColor(showInfo ? Theme.accent : .white)
+                    }
+                    .padding(.horizontal, 18)
+                    .frame(maxWidth: 230, minHeight: 58)
+                    .contentShape(Capsule())
+                    .floatingGlass(Capsule())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("照片详情")
+
+                Spacer(minLength: 18)
+
+                roundControlButton("arrow.uturn.backward",
+                                   tint: engine.bin.isEmpty ? Theme.textTertiary : .white,
+                                   label: "撤回上一步",
+                                   enabled: !engine.bin.isEmpty,
+                                   action: engine.undoLastAction)
             }
-            .padding(.horizontal, 6)
-            .floatingGlass(Capsule())
+            .frame(maxWidth: .infinity)
 
             Text("上滑删除 · 左右切换")
                 .font(.system(size: 11, weight: .medium))
@@ -201,17 +220,17 @@ struct ReviewScreen: View {
         .animation(.easeOut(duration: 0.18), value: chromeVisible)
     }
 
-    private func controlButton(_ icon: String,
-                               tint: Color,
-                               enabled: Bool,
-                               label: String,
-                               action: @escaping () -> Void) -> some View {
+    private func roundControlButton(_ icon: String,
+                                    tint: Color,
+                                    label: String,
+                                    enabled: Bool = true,
+                                    action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundColor(tint)
-                .frame(width: 56, height: 48)
-                .contentShape(Rectangle())
+                .frame(width: 58, height: 58)
+                .floatingGlass(Circle())
         }
         .buttonStyle(PressableStyle())
         .disabled(!enabled)
@@ -259,6 +278,22 @@ struct ReviewScreen: View {
 
     private func syncFavorite() {
         isFavorite = engine.current?.isFavorite ?? false
+    }
+
+    private func loadPlaceTitle() {
+        placeTitle = ""
+        guard let location = engine.current?.location else { return }
+        CLGeocoder().reverseGeocodeLocation(location) { placemarks, _ in
+            guard let placemark = placemarks?.first else { return }
+            let title = [placemark.locality, placemark.subLocality, placemark.name]
+                .compactMap { $0 }
+                .first { !$0.isEmpty } ?? ""
+            DispatchQueue.main.async {
+                guard engine.current?.location?.coordinate.latitude == location.coordinate.latitude,
+                      engine.current?.location?.coordinate.longitude == location.coordinate.longitude else { return }
+                placeTitle = title
+            }
+        }
     }
 
     private func toggleFavorite() {

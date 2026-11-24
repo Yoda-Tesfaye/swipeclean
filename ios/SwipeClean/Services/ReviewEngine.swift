@@ -29,6 +29,7 @@ final class ReviewEngine: ObservableObject {
     @Published private(set) var items: [PHAsset] = []
     @Published private(set) var index: Int = 0
     @Published private(set) var bin: [PHAsset] = []
+    @Published private(set) var batchCandidates: [PHAsset] = []
     @Published private(set) var reviewedCount: Int = 0
     @Published private(set) var reviewedInBatch: Int = 0
     @Published private(set) var deletedCount: Int = 0
@@ -97,6 +98,7 @@ final class ReviewEngine: ObservableObject {
         reviewedInBatch = 0
         deletedCount = 0
         bin.removeAll()
+        batchCandidates.removeAll()
         stack.removeAll()
         canUndo = false
         pendingBatch = nil
@@ -140,12 +142,15 @@ final class ReviewEngine: ObservableObject {
 
     func moveBackward() {
         guard index > 0 else { return }
-        index -= 1
-        if let last = stack.last, last.index == index {
-            stack.removeLast()
-            if last.binned {
-                removeBin(at: index)
-            }
+        let selectedIDs = Set(bin.map(\.localIdentifier))
+        var target = index - 1
+        while target > 0, selectedIDs.contains(items[target].localIdentifier) {
+            target -= 1
+        }
+        guard !selectedIDs.contains(items[target].localIdentifier) else { return }
+        index = target
+        if let stackIndex = stack.lastIndex(where: { $0.index == target }), !stack[stackIndex].binned {
+            stack.remove(at: stackIndex)
             reviewedCount = max(reviewedCount - 1, 0)
             reviewedInBatch = max(reviewedInBatch - 1, 0)
         }
@@ -160,6 +165,7 @@ final class ReviewEngine: ObservableObject {
         guard phase == .ready, let asset = current else { return }
         history.markViewed(asset.localIdentifier, mode: mode)
         bin.append(asset)
+        batchCandidates.append(asset)
         stack.append((index: index, binned: true))
         reviewedCount += 1
         reviewedInBatch += 1
@@ -192,6 +198,15 @@ final class ReviewEngine: ObservableObject {
     func removeBin(_ asset: PHAsset) {
         bin.removeAll { $0.localIdentifier == asset.localIdentifier }
         canUndo = !bin.isEmpty
+    }
+
+    func toggleBatchSelection(_ asset: PHAsset) {
+        if bin.contains(where: { $0.localIdentifier == asset.localIdentifier }) {
+            removeBin(asset)
+        } else if batchCandidates.contains(where: { $0.localIdentifier == asset.localIdentifier }) {
+            bin.append(asset)
+            canUndo = true
+        }
     }
 
     func removeBin(at itemIndex: Int) {
@@ -289,6 +304,7 @@ final class ReviewEngine: ObservableObject {
 
         items.removeAll { identifiers.contains($0.localIdentifier) }
         bin.removeAll { identifiers.contains($0.localIdentifier) }
+        batchCandidates.removeAll { identifiers.contains($0.localIdentifier) }
         historyCount = history.count(mode: mode)
         deletedCount += assets.count
         stack.removeAll()
