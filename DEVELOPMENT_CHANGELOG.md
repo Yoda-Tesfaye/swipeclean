@@ -2,7 +2,7 @@
 ## 2026-11-25 · Codex · v1.8.4（构建号 13）
 
 - `ios/SwipeClean/Views/AssetInfoPanel.swift`：修复 1.8.3 首次云构建报告的编译错误，移除位置卡片中误引用的安全区变量。
-- 市场版本/构建号递增至 `1.8.4 (13)`；提交后重新触发云构建，IPA 结果待记录。
+- 市场版本/构建号递增至 `1.8.4 (13)`；提交 `fe9784c` 的 GitHub Actions run #26 构建成功。\n- IPA `dist/SwipeClean-1.8.4-unsigned.ipa` 已归档至 `dist/` 根目录；确认包含单个 `SwipeClean.app`、arm64 Mach-O 主程序且未签名。设备安装测试由用户完成。
 
 
 供 DeepSeek Harness（DSH）与 Codex 协作时记录项目变更。每次修改请在文件顶部追加一条，注明日期、修改者、提交号（若已提交）、涉及文件、行为变化，以及是否构建/测试和生成了什么安装包。不要把未验证的结果写成已完成。
@@ -37,7 +37,7 @@
 - `ios/SwipeClean/Views/ReviewScreen.swift`：将顶部模式胶囊替换为浏览进度条；底部收藏、详情、撤回控件缩至 44 pt 高度。详情不再作为独立圆角面板呈现，改为全屏照片模糊背景覆盖。
 - `ios/SwipeClean/Views/AssetInfoPanel.swift`：使用当前照片的高分辨率图像铺满背景并模糊，元数据内容浮在其上。
 - `ios/SwipeClean/Services/ReviewEngine.swift`、`ios/SwipeClean/Views/CardPager.swift`：翻页目标和左右邻卡都按删除备选过滤，并以相邻可浏览照片计算动画位置，避免短暂闪过、卡顿或向前翻页再次出现。
-- 市场版本/构建号已升至 `1.8.3 (12)`；构建与 IPA 归档结果待记录。
+- 市场版本/构建号升至 `1.8.3 (12)`；首次 macOS 构建因详情面板中的 `topInset` 作用域错误失败（Actions run #25），该编译问题已在 `1.8.4 (13)` 修复并成功构建。
 
 ## 2026-11-25 · Codex · `60b7e91`
 
