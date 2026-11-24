@@ -9,12 +9,14 @@ struct ReviewScreen: View {
     @ObservedObject var engine: ReviewEngine
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("review.firstGestureHintShown") private var hasSeenFirstGestureHint = false
 
     @State private var chromeVisible = true
     @State private var showBin = false
     @State private var showInfo = false
     @State private var isFavorite = false
     @State private var placeTitle = ""
+    @State private var showFirstGestureHint = false
 
     private var motion: Animation? {
         AppMotion.spring(reduceMotion: reduceMotion)
@@ -54,6 +56,18 @@ struct ReviewScreen: View {
                 }
                 .transition(.opacity)
             }
+
+            if showFirstGestureHint, engine.phase == .ready {
+                Text("左右切换 · 上滑删除 · 下滑撤回")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.92))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .glassSurface(Capsule())
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
         }
         .sheet(item: $engine.pendingBatch, onDismiss: {
             engine.skipBatch()
@@ -63,6 +77,16 @@ struct ReviewScreen: View {
         .onAppear {
             syncFavorite()
             loadPlaceTitle()
+            guard !hasSeenFirstGestureHint, engine.current != nil else { return }
+            hasSeenFirstGestureHint = true
+            withAnimation(.easeOut(duration: 0.22)) {
+                showFirstGestureHint = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showFirstGestureHint = false
+                }
+            }
         }
         .onChange(of: engine.index) { _ in
             syncFavorite()
@@ -84,16 +108,10 @@ struct ReviewScreen: View {
                     closeInfo()
                 }
                 .transition(.opacity)
+                .ignoresSafeArea()
                 .zIndex(2)
             } else {
                 CardPager(engine: engine, chromeVisible: $chromeVisible)
-                    .overlay(alignment: .top) {
-                        if engine.reviewedCount == 0 {
-                            swipeHint
-                                .padding(.top, 74)
-                        }
-                    }
-
                 header
             }
         }
@@ -131,9 +149,11 @@ struct ReviewScreen: View {
                         .fill(Color.white.opacity(0.28))
                         .frame(width: width, height: 5)
                     Capsule()
-                        .fill(Color.white)
+                        .fill(LinearGradient(colors: [.white, .white.opacity(0.88)], startPoint: .leading, endPoint: .trailing))
                         .frame(width: max(0, width * engine.progress), height: 5)
                 }
+                .clipShape(Capsule())
+                .animation(.spring(response: 0.52, dampingFraction: 0.8), value: engine.progress)
                 .frame(width: width, height: 44)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -174,7 +194,7 @@ struct ReviewScreen: View {
     // MARK: - Bottom controls
 
     private var bottomControls: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 0) {
             HStack(spacing: 0) {
                 roundControlButton(isFavorite ? "heart.fill" : "heart",
                                    tint: isFavorite ? Theme.danger : .white,
@@ -218,9 +238,6 @@ struct ReviewScreen: View {
             }
             .frame(maxWidth: .infinity)
 
-            Text("上滑删除 · 左右切换")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.55))
         }
         .opacity(chromeVisible ? 1 : 0)
         .allowsHitTesting(chromeVisible)
@@ -243,20 +260,6 @@ struct ReviewScreen: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.38)
         .accessibilityLabel(label)
-    }
-
-    private var swipeHint: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "chevron.up")
-                .font(.system(size: 10, weight: .bold))
-            Text("上滑删除")
-                .font(.system(size: 12, weight: .semibold))
-        }
-        .foregroundColor(.white.opacity(0.8))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .glassSurface(Capsule())
-        .transition(.opacity)
     }
 
     private var relativeDateText: String {
@@ -335,9 +338,7 @@ struct ReviewScreen: View {
                     let refreshed = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil).firstObject
                     let actual = refreshed?.isFavorite ?? target
                     isFavorite = actual
-                    if actual == target {
-                        engine.showToast(target ? "已收藏，已同步到相册" : "已取消收藏")
-                    } else {
+                    if actual != target {
                         Haptics.warning()
                         engine.showToast("相册未同步，请把照片权限改为「完全访问」")
                     }
@@ -424,11 +425,6 @@ struct ReviewScreen: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 40)
-
-            Text("想再刷一遍？到「设置」里重置浏览记录")
-                .font(.system(size: 11))
-                .foregroundColor(Theme.textTertiary)
-                .padding(.top, 4)
 
             Spacer(minLength: 0)
         }

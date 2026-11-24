@@ -28,28 +28,29 @@ struct AmbientBackground: View {
     let asset: PHAsset?
 
     @State private var image: UIImage?
+    @State private var previousImage: UIImage?
+    @State private var requestedIdentifier: String?
+    @State private var crossfade: Double = 1
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 Theme.background
 
+                if let previousImage {
+                    backgroundImage(previousImage, size: geo.size)
+                        .opacity(1 - crossfade)
+                }
+
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                        .blur(radius: 48)
-                        .opacity(0.55)
-                        .overlay(Color.black.opacity(0.35))
+                    backgroundImage(image, size: geo.size)
+                        .opacity(crossfade)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.35), value: asset?.localIdentifier)
         .onAppear(perform: load)
         .onChange(of: asset?.localIdentifier) { _ in
             load()
@@ -58,10 +59,35 @@ struct AmbientBackground: View {
 
     private func load() {
         guard let asset else { return }
+        let identifier = asset.localIdentifier
+        requestedIdentifier = identifier
         ImageStore.shared.load(for: asset, target: CGSize(width: 90, height: 90)) { loaded in
             guard let loaded else { return }
-            image = loaded
+            DispatchQueue.main.async {
+                guard requestedIdentifier == identifier else { return }
+                previousImage = image
+                image = loaded
+                crossfade = 0
+                withAnimation(.easeInOut(duration: 0.85)) {
+                    crossfade = 1
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                    guard requestedIdentifier == identifier else { return }
+                    previousImage = nil
+                }
+            }
         }
+    }
+
+    private func backgroundImage(_ image: UIImage, size: CGSize) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: size.width, height: size.height)
+            .clipped()
+            .blur(radius: 48)
+            .opacity(0.55)
+            .overlay(Color.black.opacity(0.35))
     }
 }
 

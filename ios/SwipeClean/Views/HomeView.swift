@@ -167,9 +167,7 @@ struct DeckHome: View {
 
                     Spacer(minLength: 8)
 
-                    footer
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 104)
+                    Spacer(minLength: 112)
                 }
             }
         }
@@ -290,20 +288,6 @@ struct DeckHome: View {
         }
     }
 
-    // MARK: - Footer
-
-    private var footer: some View {
-        VStack(spacing: 6) {
-            if engine.phase == .ready {
-                Text("轻点卡片开始 · 上滑删除 · 下滑撤销")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Theme.textSecondary)
-                Text("每浏览 \(engine.batchSize) 项确认一次 · 已浏览的不会再次出现")
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.textTertiary)
-            }
-        }
-    }
 }
 
 // MARK: - Fan

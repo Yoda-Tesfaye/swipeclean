@@ -68,9 +68,8 @@ final class ReviewEngine: ObservableObject {
     }
 
     var progress: Double {
-        let total = reviewedCount + remaining
-        guard total > 0 else { return 0 }
-        return min(max(Double(reviewedCount) / Double(total), 0), 1)
+        guard batchSize > 0 else { return 0 }
+        return min(max(Double(reviewedInBatch) / Double(batchSize), 0), 1)
     }
 
     var isReady: Bool { phase == .ready }
@@ -134,6 +133,7 @@ final class ReviewEngine: ObservableObject {
 
     func moveForward() {
         guard phase == .ready, let asset = current else { return }
+        if reviewedInBatch >= batchSize { reviewedInBatch = 0 }
         history.markViewed(asset.localIdentifier, mode: mode)
         stack.append((index: index, binned: false))
         reviewedCount += 1
@@ -161,6 +161,7 @@ final class ReviewEngine: ObservableObject {
 
     func markCurrentForDeletion() {
         guard phase == .ready, let asset = current else { return }
+        if reviewedInBatch >= batchSize { reviewedInBatch = 0 }
         history.markViewed(asset.localIdentifier, mode: mode)
         bin.append(asset)
         batchCandidates.append(asset)
@@ -245,9 +246,6 @@ final class ReviewEngine: ObservableObject {
             return
         }
 
-        if reviewedInBatch >= batchSize {
-            reviewedInBatch = 0
-        }
     }
 
     private func scheduleBatchPrompt() {

@@ -1,4 +1,13 @@
 # 开发修改日志
+
+## 2026-11-25 · Codex · v1.8.5（构建号 14）
+
+- `ios/SwipeClean/Views/ReviewScreen.swift`：详情覆盖层延伸至安全区外，避免屏幕底部模糊背景露出断层。
+- `ios/SwipeClean/Services/ReviewEngine.swift`、`ios/SwipeClean/Views/ReviewScreen.swift`：顶部进度改为当前组进度，前景从左侧填充，并使用弹性曲线随每次操作平滑推进；组满时保持满格直到下一次浏览或确认。
+- `ios/SwipeClean/Views/Components.swift`：照片背景改为 0.85 秒交叉淡化，减轻颜色突变。
+- `ios/SwipeClean/Views/HomeView.swift`、`ios/SwipeClean/Views/ReviewScreen.swift`：移除常驻手势提示；只在首次进入浏览页时显示一次短暂手势引导。收藏成功/取消成功不再弹提示，错误仍保留提醒；移除完成页多余说明。
+- 市场版本/构建号递增至 `1.8.5 (14)`；云构建与 IPA 归档结果待记录。
+
 ## 2026-11-25 · Codex · v1.8.4（构建号 13）
 
 - `ios/SwipeClean/Views/AssetInfoPanel.swift`：修复 1.8.3 首次云构建报告的编译错误，移除位置卡片中误引用的安全区变量。
