@@ -2,7 +2,8 @@
 ## 2026-11-25 · Codex · v1.8.4（构建号 13）
 
 - `ios/SwipeClean/Views/AssetInfoPanel.swift`：修复 1.8.3 首次云构建报告的编译错误，移除位置卡片中误引用的安全区变量。
-- 市场版本/构建号递增至 `1.8.4 (13)`；提交 `fe9784c` 的 GitHub Actions run #26 构建成功。\n- IPA `dist/SwipeClean-1.8.4-unsigned.ipa` 已归档至 `dist/` 根目录；确认包含单个 `SwipeClean.app`、arm64 Mach-O 主程序且未签名。设备安装测试由用户完成。
+- 市场版本/构建号递增至 `1.8.4 (13)`；提交 `fe9784c` 的 GitHub Actions run #26 构建成功。
+- IPA `dist/SwipeClean-1.8.4-unsigned.ipa` 已归档至 `dist/` 根目录；确认包含单个 `SwipeClean.app`、arm64 Mach-O 主程序且未签名。设备安装测试由用户完成。
 
 
 供 DeepSeek Harness（DSH）与 Codex 协作时记录项目变更。每次修改请在文件顶部追加一条，注明日期、修改者、提交号（若已提交）、涉及文件、行为变化，以及是否构建/测试和生成了什么安装包。不要把未验证的结果写成已完成。
