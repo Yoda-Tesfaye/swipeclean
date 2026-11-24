@@ -44,11 +44,7 @@ struct TabBar: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.regularMaterial)
-                    .overlay(
-                        Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.35), radius: 16, x: 0, y: 8)
+                    .floatingGlassPanel(Capsule())
 
                 Capsule()
                     .frame(width: itemWidth - 2, height: barHeight - 8)
